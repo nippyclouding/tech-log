@@ -34,6 +34,10 @@ export default defineConfig(({mode}) => {
           target: 'http://localhost:8080',
           changeOrigin: true,
         },
+        '/admin-console': {
+          target: 'http://localhost:8080',
+          changeOrigin: true,
+        },
         '/login': {
           target: 'http://localhost:8080',
           changeOrigin: true,

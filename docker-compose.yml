@@ -1,0 +1,76 @@
+services:
+  frontend:
+    build:
+      context: ./tech-log-front
+    container_name: tech-log-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    networks:
+      - tech-log-net
+    mem_limit: 128m
+
+  backend:
+    build:
+      context: ./tech-log-back
+    container_name: tech-log-backend
+    restart: unless-stopped
+    env_file:
+      - ./.env.prod
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/techlog
+      SPRING_DATASOURCE_USERNAME: techlog
+      IMAGE_UPLOAD_DIR: /app/image
+      DB_MAX_POOL_SIZE: 5
+      DB_MIN_IDLE: 1
+      JAVA_TOOL_OPTIONS: -XX:MaxRAM=450m
+    volumes:
+      - tech-log-images:/app/image
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tech-log-net
+    mem_limit: 650m
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: tech-log-postgres
+    restart: unless-stopped
+    env_file:
+      - ./.env.prod
+    environment:
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C
+    command:
+      - postgres
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - max_connections=30
+      - -c
+      - work_mem=2MB
+      - -c
+      - maintenance_work_mem=32MB
+    volumes:
+      - tech-log-postgres-data:/var/lib/postgresql/data
+      - ./tech-log-back/src/main/resources/ddl.sql:/docker-entrypoint-initdb.d/01-ddl.sql:ro
+      - ./tech-log-back/src/main/resources/index.sql:/docker-entrypoint-initdb.d/02-index.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tech-log-net
+    mem_limit: 300m
+
+networks:
+  tech-log-net:
+    driver: bridge
+
+volumes:
+  tech-log-postgres-data:
+  tech-log-images:

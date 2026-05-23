@@ -19,6 +19,7 @@ public class BoardController {
 
     private final BoardService boardService;
 
+    // 게시판 검색 api
     @GetMapping
     public ResponseEntity<PageResponse<PostSummaryResponse>> search(
             @RequestParam(required = false) String category,
@@ -29,6 +30,7 @@ public class BoardController {
         return ResponseEntity.ok(boardService.search(category, keyword, page, size));
     }
 
+    // 게시판 상세 조회
     @GetMapping("/{id}")
     public ResponseEntity<PostDetailResponse> get(@PathVariable Long id) {
         return ResponseEntity.ok(boardService.get(id));

@@ -41,6 +41,7 @@ public class BoardService {
     private final ImageRepository imageRepository;
     private final LocalImageStorageService localImageStorageService;
 
+    // 검색
     public PageResponse<PostSummaryResponse> search(String category, String keyword, int page, int size) {
         PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "updatedAt"));
         return PageResponse.from(boardRepository.search(blankToNull(category), blankToNull(keyword), pageRequest).map(this::toSummary));
@@ -49,7 +50,7 @@ public class BoardService {
     @Transactional
     public PostDetailResponse get(Long id) {
         Board board = findBoard(id);
-        board.increaseViews();
+        board.increaseViews(); // 변경 감지로 조회수 + 1
         return toDetail(board);
     }
 

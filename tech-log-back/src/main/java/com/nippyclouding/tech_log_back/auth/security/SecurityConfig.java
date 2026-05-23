@@ -17,7 +17,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.crypto.password.NoOpPasswordEncoder;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserService;
@@ -88,18 +88,18 @@ public class SecurityConfig {
     @Bean
     public UserDetailsService adminConsoleUserDetailsService(
             @Value("${app.admin-console.username}") String username,
-            @Value("${app.admin-console.password}") String password
+            @Value("${app.admin-console.password}") String password,
+            PasswordEncoder passwordEncoder
     ) {
         return new InMemoryUserDetailsManager(User.withUsername(username)
-                .password(password)
+                .password(passwordEncoder.encode(password))
                 .roles("ADMIN")
                 .build());
     }
 
     @Bean
-    @SuppressWarnings("deprecation")
     public PasswordEncoder passwordEncoder() {
-        return NoOpPasswordEncoder.getInstance();
+        return new BCryptPasswordEncoder();
     }
 
     @Bean

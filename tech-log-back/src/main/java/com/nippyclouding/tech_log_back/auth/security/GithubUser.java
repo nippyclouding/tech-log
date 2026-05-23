@@ -17,6 +17,9 @@ public record GithubUser(Long id, String login, String name, String email, Strin
     }
 
     private static Long toLong(Object value) {
+        if (value == null) {
+            return null; // Safe guard against null IDs
+        }
         if (value instanceof Number number) {
             return number.longValue();
         }
