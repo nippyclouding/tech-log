@@ -906,7 +906,7 @@ public class AdminConsoleController {
                       loginLogPage = data.page;
                       document.getElementById('loginLogPageLabel').textContent = `${data.page + 1} / ${Math.max(data.totalPages, 1)}`;
                       document.getElementById('loginLogs').innerHTML = table(
-                        ['Provider', 'Login ID', 'IP', 'Time'],
+                        ['Provider / Result', 'Login ID', 'IP', 'Time'],
                         data.content.map(log => [
                           log.provider,
                           escapeHtml(log.loginId),

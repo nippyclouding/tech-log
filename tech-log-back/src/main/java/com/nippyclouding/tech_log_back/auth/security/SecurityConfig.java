@@ -54,10 +54,13 @@ public class SecurityConfig {
                         .usernameParameter("adminId")
                         .passwordParameter("adminPassword")
                         .successHandler((request, response, authentication) -> {
-                            loginLogService.record("admin-console", authentication.getName(), ClientIpResolver.resolve(request));
+                            loginLogService.record("admin-console-success", authentication.getName(), ClientIpResolver.resolve(request));
                             response.sendRedirect("/admin-console");
                         })
-                        .failureUrl("/admin-console?error")
+                        .failureHandler((request, response, exception) -> {
+                            loginLogService.record("admin-console-failure", request.getParameter("adminId"), ClientIpResolver.resolve(request));
+                            response.sendRedirect("/admin-console?error");
+                        })
                         .permitAll()
                 )
                 .oauth2Login(oauth2 -> oauth2
@@ -68,7 +71,11 @@ public class SecurityConfig {
                                 GithubUser githubUser = GithubUser.from(oauth2User);
                                 loginId = githubUser.login().isBlank() ? githubUser.name() : githubUser.login();
                             }
-                            loginLogService.record("github", loginId, ClientIpResolver.resolve(request));
+                            loginLogService.record("github-success", loginId, ClientIpResolver.resolve(request));
+                            response.sendRedirect("/");
+                        })
+                        .failureHandler((request, response, exception) -> {
+                            loginLogService.record("github-failure", "unknown", ClientIpResolver.resolve(request));
                             response.sendRedirect("/");
                         })
                 )

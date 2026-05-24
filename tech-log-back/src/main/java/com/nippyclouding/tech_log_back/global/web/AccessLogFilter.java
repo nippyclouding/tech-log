@@ -15,7 +15,9 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AccessLogFilter extends OncePerRequestFilter {
 
-    private static final Set<String> SUPPORTED_METHODS = Set.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD");
+    private static final Set<String> RECORDABLE_METHODS = Set.of("GET", "POST", "PUT", "PATCH", "DELETE");
+    private static final Set<String> MUTATION_METHODS = Set.of("POST", "PUT", "DELETE");
+    private static final Set<String> EXCLUDED_PATHS = Set.of("/api/admin/access-logs", "/api/admin/login-logs");
 
     private final AccessLogService accessLogService;
 
@@ -25,7 +27,7 @@ public class AccessLogFilter extends OncePerRequestFilter {
         try {
             filterChain.doFilter(request, response);
         } finally {
-            if (SUPPORTED_METHODS.contains(request.getMethod())) {
+            if (shouldRecord(request, response)) {
                 accessLogService.record(
                         ClientIpResolver.resolve(request),
                         request.getRequestURI(),
@@ -34,5 +36,28 @@ public class AccessLogFilter extends OncePerRequestFilter {
                 );
             }
         }
+    }
+
+    private boolean shouldRecord(HttpServletRequest request, HttpServletResponse response) {
+        String method = request.getMethod();
+        String path = request.getRequestURI();
+        int status = response.getStatus();
+
+        if (!RECORDABLE_METHODS.contains(method)) {
+            return false;
+        }
+        if (status >= 500) {
+            return true;
+        }
+        if (path.startsWith("/api/admin/") && (status == 401 || status == 403)) {
+            return true;
+        }
+        if (EXCLUDED_PATHS.contains(path)) {
+            return false;
+        }
+        if (path.startsWith("/api/admin/") && MUTATION_METHODS.contains(method)) {
+            return true;
+        }
+        return "POST".equals(method) && path.matches("/api/posts/[^/]+/comments");
     }
 }

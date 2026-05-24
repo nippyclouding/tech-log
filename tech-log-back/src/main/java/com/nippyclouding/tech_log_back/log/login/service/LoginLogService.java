@@ -23,6 +23,10 @@ public class LoginLogService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void record(String provider, String loginId, String accessIp) {
-        loginLogRepository.save(new LoginLog(provider, loginId, accessIp));
+        String recordedLoginId = loginId == null || loginId.isBlank() ? "unknown" : loginId;
+        if (recordedLoginId.length() > 100) {
+            recordedLoginId = recordedLoginId.substring(0, 100);
+        }
+        loginLogRepository.save(new LoginLog(provider, recordedLoginId, accessIp));
     }
 }
