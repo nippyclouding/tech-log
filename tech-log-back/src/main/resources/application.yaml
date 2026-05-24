@@ -3,6 +3,10 @@ spring:
     import: optional:file:.env[.properties]
   application:
     name: tech-log-back
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 25MB
   security:
     oauth2:
       client:

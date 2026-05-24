@@ -20,8 +20,10 @@ import com.nippyclouding.tech_log_back.global.exception.ErrorCode;
 import com.nippyclouding.tech_log_back.image.entity.Image;
 import com.nippyclouding.tech_log_back.image.repository.ImageRepository;
 import com.nippyclouding.tech_log_back.image.service.LocalImageStorageService;
+import com.nippyclouding.tech_log_back.image.service.StoredImage;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -137,6 +139,67 @@ class BoardServiceTest {
         assertThatThrownBy(() -> boardService.create(request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("At least one category is required.");
+    }
+
+    @Test
+    @DisplayName("여러 업로드 이미지 placeholder를 해당 이미지 URL로 치환한다")
+    void create_replacesMultipleUploadedImagePlaceholders() {
+        // given
+        List<StoredImage> images = uploadedImages(2);
+        given(localImageStorageService.store(any())).willReturn(images);
+        given(boardRepository.save(any(Board.class))).willAnswer(invocation -> invocation.getArgument(0));
+        given(categoryRepository.findByName("Spring")).willReturn(Optional.of(category("Spring")));
+
+        PostCreateRequest request = imagePostRequest(images);
+
+        // when
+        PostDetailResponse response = boardService.create(request, List.of());
+
+        // then
+        assertThat(response.content())
+                .contains("![image-0.png](/image/0.png)")
+                .contains("![image-1.png](/image/1.png)");
+    }
+
+    @Test
+    @DisplayName("두 자리 이미지 순번도 앞 순번 URL과 충돌하지 않는다")
+    void create_replacesDoubleDigitUploadedImagePlaceholderWithoutPrefixCollision() {
+        // given
+        List<StoredImage> images = uploadedImages(11);
+        given(localImageStorageService.store(any())).willReturn(images);
+        given(boardRepository.save(any(Board.class))).willAnswer(invocation -> invocation.getArgument(0));
+        given(categoryRepository.findByName("Spring")).willReturn(Optional.of(category("Spring")));
+
+        PostCreateRequest request = imagePostRequest(images);
+
+        // when
+        PostDetailResponse response = boardService.create(request, List.of());
+
+        // then
+        assertThat(response.content())
+                .contains("![image-10.png](/image/10.png)")
+                .doesNotContain("/image/1.png0");
+    }
+
+    private PostCreateRequest imagePostRequest(List<StoredImage> images) {
+        String content = images.stream()
+                .map(image -> "[이미지: " + image.originalName() + "](pending-image:" + image.order() + ")")
+                .reduce("본문", (result, placeholder) -> result + "\n\n" + placeholder);
+        return new PostCreateRequest("이미지 글", null, content, "Spring", null, List.of(), List.of("Spring"));
+    }
+
+    private List<StoredImage> uploadedImages(int count) {
+        return IntStream.range(0, count)
+                .mapToObj(order -> new StoredImage(
+                        "/image/" + order + ".png",
+                        "image-" + order + ".png",
+                        order + ".png",
+                        "image/png",
+                        1L,
+                        order,
+                        order == 0
+                ))
+                .toList();
     }
 
     private Board board(String title, String content) {

@@ -177,7 +177,7 @@ public class BoardService {
 
     private String replaceImagePlaceholders(String content, List<StoredImage> images) {
         String replaced = content;
-        for (int i = 0; i < images.size(); i++) {
+        for (int i = images.size() - 1; i >= 0; i--) {
             StoredImage image = images.get(i);
             replaced = replaced.replace(
                     "[이미지: " + image.originalName() + "](pending-image:" + i + ")",
