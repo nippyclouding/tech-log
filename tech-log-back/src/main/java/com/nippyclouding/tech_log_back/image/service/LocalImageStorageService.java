@@ -9,9 +9,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +22,8 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class LocalImageStorageService {
+
+    private static final Logger log = LoggerFactory.getLogger(LocalImageStorageService.class);
 
     private final ImageStorageProperties properties;
 
@@ -39,10 +44,25 @@ public class LocalImageStorageService {
         }
 
         List<StoredImage> storedImages = new ArrayList<>();
-        for (int i = 0; i < images.size(); i++) {
-            storedImages.add(storeOne(images.get(i), uploadDir, i));
+        try {
+            for (int i = 0; i < images.size(); i++) {
+                storedImages.add(storeOne(images.get(i), uploadDir, i));
+            }
+        } catch (RuntimeException e) {
+            deleteStoredFiles(storedImages.stream().map(StoredImage::storedName).toList());
+            throw e;
         }
         return storedImages;
+    }
+
+    public void deleteStoredFiles(Collection<String> storedNames) {
+        if (storedNames == null || storedNames.isEmpty()) {
+            return;
+        }
+        Path uploadDir = Path.of(properties.uploadDir()).toAbsolutePath().normalize();
+        storedNames.stream()
+                .filter(storedName -> storedName != null && !storedName.isBlank())
+                .forEach(storedName -> deleteOne(uploadDir, storedName));
     }
 
     private StoredImage storeOne(MultipartFile file, Path uploadDir, int order) {
@@ -57,6 +77,7 @@ public class LocalImageStorageService {
         try (InputStream inputStream = file.getInputStream()) {
             Files.copy(inputStream, target, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
+            deleteOne(uploadDir, storedName);
             throw new BusinessException(ErrorCode.INVALID_IMAGE_FILE, "Could not save image file.");
         }
 
@@ -91,5 +112,18 @@ public class LocalImageStorageService {
             return "";
         }
         return filename.substring(index).toLowerCase(Locale.ROOT);
+    }
+
+    private void deleteOne(Path uploadDir, String storedName) {
+        Path target = uploadDir.resolve(storedName).normalize();
+        if (!target.startsWith(uploadDir)) {
+            log.warn("Skipping image deletion outside upload directory: {}", storedName);
+            return;
+        }
+        try {
+            Files.deleteIfExists(target);
+        } catch (IOException e) {
+            log.warn("Could not delete stored image file: {}", storedName, e);
+        }
     }
 }

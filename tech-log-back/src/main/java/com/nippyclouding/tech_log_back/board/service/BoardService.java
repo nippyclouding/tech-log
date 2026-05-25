@@ -11,6 +11,7 @@ import com.nippyclouding.tech_log_back.image.repository.ImageRepository;
 import com.nippyclouding.tech_log_back.image.entity.StorageType;
 import com.nippyclouding.tech_log_back.image.service.LocalImageStorageService;
 import com.nippyclouding.tech_log_back.image.service.StoredImage;
+import com.nippyclouding.tech_log_back.newsletter.event.PostPublishedEvent;
 import com.nippyclouding.tech_log_back.global.exception.BusinessException;
 import com.nippyclouding.tech_log_back.global.exception.ErrorCode;
 import com.nippyclouding.tech_log_back.global.dto.PageResponse;
@@ -21,10 +22,13 @@ import com.nippyclouding.tech_log_back.board.dto.PostUpdateRequest;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 import lombok.RequiredArgsConstructor;
 
@@ -34,23 +38,25 @@ import lombok.RequiredArgsConstructor;
 public class BoardService {
 
     private static final String DEFAULT_COVER_IMAGE = "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&auto=format&fit=crop";
+    private static final int MAX_PUBLIC_PAGE_SIZE = 50;
 
     private final BoardRepository boardRepository;
     private final CategoryRepository categoryRepository;
     private final BoardCategoryRepository boardCategoryRepository;
     private final ImageRepository imageRepository;
     private final LocalImageStorageService localImageStorageService;
+    private final ApplicationEventPublisher eventPublisher;
 
     // 검색
     public PageResponse<PostSummaryResponse> search(String category, String keyword, int page, int size) {
+        validatePublicPaging(page, size);
         PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "updatedAt"));
         return PageResponse.from(boardRepository.search(blankToNull(category), blankToNull(keyword), pageRequest).map(this::toSummary));
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public PostDetailResponse get(Long id) {
         Board board = findBoard(id);
-        board.increaseViews(); // 변경 감지로 조회수 + 1
         return toDetail(board);
     }
 
@@ -59,24 +65,32 @@ public class BoardService {
         Board board = boardRepository.save(new Board(request.title(), request.content()));
         replaceCategories(board, request.category(), request.tags(), request.categories());
         replaceCoverImageUrl(board, request.coverImage());
-        return toDetail(board);
+        PostDetailResponse response = toDetail(board);
+        publishPostCreated(response);
+        return response;
     }
 
     @Transactional
     public PostDetailResponse create(PostCreateRequest request, List<MultipartFile> images) {
         List<StoredImage> storedImages = localImageStorageService.store(images);
+        cleanupStoredImagesOnRollback(storedImages);
         Board board = boardRepository.save(new Board(request.title(), replaceImagePlaceholders(request.content(), storedImages)));
         replaceCategories(board, request.category(), request.tags(), request.categories());
-        replaceUploadedImages(board, storedImages);
-        return toDetail(board);
+        replaceUploadedImages(board, storedImages, List.of());
+        PostDetailResponse response = toDetail(board);
+        publishPostCreated(response);
+        return response;
     }
 
     @Transactional
     public PostDetailResponse update(Long id, PostUpdateRequest request) {
         Board board = findBoard(id);
+        List<Image> retainedImages = referencedUploadedImages(board, request.content(), request.coverImage());
+        List<String> obsoleteStoredNames = unreferencedUploadedStoredNames(board, request.content(), request.coverImage());
         board.update(request.title(), request.content());
         replaceCategories(board, request.category(), request.tags(), request.categories());
-        replaceCoverImageUrl(board, request.coverImage());
+        replaceCoverImageUrl(board, request.coverImage(), retainedImages);
+        deleteStoredFilesAfterCommit(obsoleteStoredNames);
         return toDetail(board);
     }
 
@@ -84,10 +98,14 @@ public class BoardService {
     public PostDetailResponse update(Long id, PostUpdateRequest request, List<MultipartFile> images) {
         Board board = findBoard(id);
         List<StoredImage> storedImages = localImageStorageService.store(images);
+        cleanupStoredImagesOnRollback(storedImages);
         board.update(request.title(), replaceImagePlaceholders(request.content(), storedImages));
         replaceCategories(board, request.category(), request.tags(), request.categories());
         if (!storedImages.isEmpty()) {
-            replaceUploadedImages(board, storedImages);
+            List<Image> retainedImages = referencedUploadedImages(board, board.getContent(), null);
+            List<String> obsoleteStoredNames = unreferencedUploadedStoredNames(board, board.getContent(), null);
+            replaceUploadedImages(board, storedImages, retainedImages);
+            deleteStoredFilesAfterCommit(obsoleteStoredNames);
         }
         return toDetail(board);
     }
@@ -95,7 +113,9 @@ public class BoardService {
     @Transactional
     public void delete(Long id) {
         Board board = findBoard(id);
+        List<String> previousStoredNames = uploadedStoredNames(board);
         boardRepository.delete(board);
+        deleteStoredFilesAfterCommit(previousStoredNames);
     }
 
     private Board findBoard(Long id) {
@@ -121,7 +141,7 @@ public class BoardService {
         boardCategoryRepository.deleteByBoard(board);
         board.getBoardCategories().clear();
         names.stream()
-                .map(this::findOrCreateCategory)
+                .map(this::findCategory)
                 .map(category -> new BoardCategory(board, category))
                 .forEach(boardCategory -> {
                     board.getBoardCategories().add(boardCategory);
@@ -129,12 +149,16 @@ public class BoardService {
                 });
     }
 
-    private Category findOrCreateCategory(String name) {
+    private Category findCategory(String name) {
         return categoryRepository.findByName(name)
-                .orElseGet(() -> categoryRepository.save(new Category(name)));
+                .orElseThrow(() -> new BusinessException(ErrorCode.CATEGORY_NOT_FOUND));
     }
 
     private void replaceCoverImageUrl(Board board, String coverImage) {
+        replaceCoverImageUrl(board, coverImage, List.of());
+    }
+
+    private void replaceCoverImageUrl(Board board, String coverImage, List<Image> retainedImages) {
         imageRepository.deleteByBoard(board);
         board.getImages().clear();
         if (coverImage != null && !coverImage.isBlank()) {
@@ -152,9 +176,10 @@ public class BoardService {
             board.getImages().add(image);
             imageRepository.save(image);
         }
+        retainUploadedImages(board, retainedImages);
     }
 
-    private void replaceUploadedImages(Board board, List<StoredImage> storedImages) {
+    private void replaceUploadedImages(Board board, List<StoredImage> storedImages, List<Image> retainedImages) {
         imageRepository.deleteByBoard(board);
         board.getImages().clear();
         storedImages.stream()
@@ -173,6 +198,7 @@ public class BoardService {
                     board.getImages().add(image);
                     imageRepository.save(image);
                 });
+        retainUploadedImages(board, retainedImages);
     }
 
     private String replaceImagePlaceholders(String content, List<StoredImage> images) {
@@ -258,5 +284,92 @@ public class BoardService {
 
     private String blankToNull(String value) {
         return value == null || value.isBlank() || "All".equalsIgnoreCase(value) ? null : value.trim();
+    }
+
+    private void publishPostCreated(PostDetailResponse response) {
+        eventPublisher.publishEvent(new PostPublishedEvent(response.id(), response.title()));
+    }
+
+    private void validatePublicPaging(int page, int size) {
+        if (page < 0) {
+            throw new IllegalArgumentException("page must not be negative.");
+        }
+        if (size < 1 || size > MAX_PUBLIC_PAGE_SIZE) {
+            throw new IllegalArgumentException("size must be between 1 and " + MAX_PUBLIC_PAGE_SIZE + ".");
+        }
+    }
+
+    private List<String> uploadedStoredNames(Board board) {
+        return board.getImages().stream()
+                .filter(image -> image.getStorageType() == StorageType.LOCAL)
+                .map(Image::getStoredName)
+                .filter(storedName -> storedName != null && !"cover-image".equals(storedName))
+                .toList();
+    }
+
+    private List<String> unreferencedUploadedStoredNames(Board board, String content, String coverImage) {
+        String references = (content == null ? "" : content) + "\n" + (coverImage == null ? "" : coverImage);
+        return uploadedStoredNames(board).stream()
+                .filter(storedName -> !references.contains(storedName))
+                .toList();
+    }
+
+    private List<Image> referencedUploadedImages(Board board, String content, String coverImage) {
+        String references = (content == null ? "" : content) + "\n" + (coverImage == null ? "" : coverImage);
+        return board.getImages().stream()
+                .filter(image -> image.getStorageType() == StorageType.LOCAL)
+                .filter(image -> image.getStoredName() != null && !"cover-image".equals(image.getStoredName()))
+                .filter(image -> references.contains(image.getStoredName()))
+                .toList();
+    }
+
+    private void retainUploadedImages(Board board, List<Image> retainedImages) {
+        retainedImages.stream()
+                .map(image -> new Image(
+                        board,
+                        image.getStorageType(),
+                        image.getFileKey(),
+                        image.getOriginalName(),
+                        image.getStoredName(),
+                        image.getContentType(),
+                        image.getFileSize(),
+                        image.getImageOrder(),
+                        false
+                ))
+                .forEach(image -> {
+                    board.getImages().add(image);
+                    imageRepository.save(image);
+                });
+    }
+
+    private void deleteStoredFilesAfterCommit(List<String> storedNames) {
+        if (storedNames.isEmpty()) {
+            return;
+        }
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            localImageStorageService.deleteStoredFiles(storedNames);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                localImageStorageService.deleteStoredFiles(storedNames);
+            }
+        });
+    }
+
+    private void cleanupStoredImagesOnRollback(List<StoredImage> storedImages) {
+        List<String> storedNames = storedImages.stream().map(StoredImage::storedName).toList();
+        if (storedNames.isEmpty() || !TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status != STATUS_COMMITTED) {
+                    localImageStorageService.deleteStoredFiles(storedNames);
+                }
+            }
+        });
     }
 }

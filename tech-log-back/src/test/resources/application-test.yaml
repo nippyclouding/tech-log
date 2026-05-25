@@ -9,12 +9,18 @@ spring:
             scope:
               - read:user
               - user:email
+  mail:
+    host: localhost
+    port: 2525
 
 app:
   admin-console:
     username: admin
     password: test-admin-password
+  frontend-origin: http://localhost:3000
   image:
     upload-dir: build/test-image
-    public-path: /image
-    max-total-size: 20MB
+  mail:
+    enabled: false
+    from: test@example.com
+    site-name: Test Tech Log

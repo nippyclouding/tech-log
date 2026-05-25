@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import { format } from "date-fns";
-import { ArrowLeft, Clock, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { motion, useScroll, useSpring } from "motion/react";
 import { Post } from "../types/blog";
 import { CommentSection } from "../components/blog/CommentSection";
@@ -88,9 +88,6 @@ export function PostPage() {
               <div className="flex items-center space-x-3 mb-6">
                 <span className="rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white uppercase tracking-wider">
                   {post.category}
-                </span>
-                <span className="text-sm text-slate-300 flex items-center">
-                  <Clock className="w-4 h-4 mr-1" /> {post.views ?? 0} views
                 </span>
               </div>
               <h1 className="text-4xl md:text-6xl font-bold text-white tracking-tight leading-tight mb-8">

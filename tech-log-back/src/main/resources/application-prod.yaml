@@ -26,6 +26,39 @@ spring:
   sql:
     init:
       mode: never
+  security:
+    oauth2:
+      client:
+        registration:
+          github:
+            client-id: ${GITHUB_CLIENT_ID}
+            client-secret: ${GITHUB_CLIENT_SECRET}
+            scope:
+              - read:user
+              - user:email
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:true}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS_ENABLE:true}
+
+app:
+  admin-console:
+    username: ${ADMIN_CONSOLE_USERNAME}
+    password: ${ADMIN_CONSOLE_PASSWORD}
+  frontend-origin: ${FRONTEND_ORIGIN}
+  image:
+    upload-dir: ${IMAGE_UPLOAD_DIR:/app/image}
+  mail:
+    enabled: ${MAIL_ENABLED:false}
+    from: ${MAIL_FROM:${MAIL_USERNAME:}}
+    site-name: ${MAIL_SITE_NAME:Tech Log}
 
 springdoc:
   api-docs:

@@ -99,3 +99,17 @@ CREATE TABLE "LOGIN_LOGS" (
 
                                CONSTRAINT "PK_LOGIN_LOGS" PRIMARY KEY ("login_log_id")
 );
+
+CREATE TABLE "NEWSLETTER_SUBSCRIPTIONS" (
+                                          "subscription_id" BIGSERIAL,
+                                          "updated_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                                          "email" VARCHAR(320) NOT NULL,
+                                          "confirmation_token" VARCHAR(36) NOT NULL,
+                                          "unsubscribe_token" VARCHAR(36) NOT NULL,
+                                          "is_confirmed" BOOLEAN DEFAULT FALSE NOT NULL,
+
+                                          CONSTRAINT "PK_NEWSLETTER_SUBSCRIPTIONS" PRIMARY KEY ("subscription_id"),
+                                          CONSTRAINT "UK_NEWSLETTER_SUBSCRIPTIONS_EMAIL" UNIQUE ("email"),
+                                          CONSTRAINT "UK_NEWSLETTER_SUBSCRIPTIONS_CONFIRMATION_TOKEN" UNIQUE ("confirmation_token"),
+                                          CONSTRAINT "UK_NEWSLETTER_SUBSCRIPTIONS_UNSUBSCRIBE_TOKEN" UNIQUE ("unsubscribe_token")
+);

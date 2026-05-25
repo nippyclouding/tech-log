@@ -268,14 +268,15 @@ public class AdminConsoleController {
                                 </div>
                                 <aside class="composer-meta">
                                   <div class="meta-block">
-                                    <h3>카테고리</h3>
+                                    <h3>기존 카테고리 선택</h3>
                                     <div class="editor-tools">
                                       <select id="createCategoryPicker" aria-label="카테고리 선택"></select>
-                                      <button type="button" class="secondary" onclick="addSelectedCategory('create')">추가</button>
+                                      <button type="button" class="secondary" onclick="addSelectedCategory('create')">선택</button>
                                     </div>
                                     <div id="createSelectedCategories" class="selected-categories">
                                       <span class="muted">선택된 카테고리가 없습니다.</span>
                                     </div>
+                                    <p class="meta-hint">새 카테고리는 카테고리 메뉴에서 먼저 생성하세요.</p>
                                   </div>
                                   <div class="meta-block">
                                     <h3>본문 이미지</h3>
@@ -337,14 +338,15 @@ public class AdminConsoleController {
                                 </div>
                                 <aside class="composer-meta">
                                   <div class="meta-block">
-                                    <h3>카테고리</h3>
+                                    <h3>기존 카테고리 선택</h3>
                                     <div class="editor-tools">
                                       <select id="editCategoryPicker" aria-label="카테고리 선택"></select>
-                                      <button type="button" class="secondary" onclick="addSelectedCategory('edit')">추가</button>
+                                      <button type="button" class="secondary" onclick="addSelectedCategory('edit')">선택</button>
                                     </div>
                                     <div id="editSelectedCategories" class="selected-categories">
                                       <span class="muted">선택된 카테고리가 없습니다.</span>
                                     </div>
+                                    <p class="meta-hint">새 카테고리는 카테고리 메뉴에서 먼저 생성하세요.</p>
                                   </div>
                                   <div class="meta-block">
                                     <h3>새 본문 이미지</h3>

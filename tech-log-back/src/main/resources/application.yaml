@@ -1,29 +1,14 @@
 spring:
-  config:
-    import: optional:file:.env[.properties]
+  profiles:
+    default: local
   application:
     name: tech-log-back
   servlet:
     multipart:
       max-file-size: 20MB
       max-request-size: 25MB
-  security:
-    oauth2:
-      client:
-        registration:
-          github:
-            client-id: ${GITHUB_CLIENT_ID:local-github-client-id}
-            client-secret: ${GITHUB_CLIENT_SECRET:local-github-client-secret}
-            scope:
-              - read:user
-              - user:email
 
 app:
-  admin-console:
-    username: ${ADMIN_CONSOLE_USERNAME:admin}
-    password: ${ADMIN_CONSOLE_PASSWORD}
-  frontend-origin: ${FRONTEND_ORIGIN:http://localhost:3000}
   image:
-    upload-dir: ${IMAGE_UPLOAD_DIR:../image}
     public-path: /image
     max-total-size: 20MB

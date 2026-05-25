@@ -22,6 +22,7 @@ application-local.yml
 application-local.yaml
 application-*.local.yml
 application-*.local.yaml
+!tech-log-back/src/main/resources/application-local.yaml
 
 # Node / Vite frontend
 node_modules/

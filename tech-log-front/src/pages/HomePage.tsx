@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Loader2, FileText } from "lucide-react";
 import { motion } from "motion/react";
 import { PostCard } from "../components/blog/PostCard";
-import { Category, fetchCategories, fetchPosts } from "../lib/api";
+import { Category, fetchCategories, fetchPosts, subscribeToNewsletter, unsubscribeFromNewsletter } from "../lib/api";
 import { Post } from "../types/blog";
 
 const POSTS_PER_PAGE = 5;
@@ -17,6 +17,9 @@ export function HomePage() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
+  const [newsletterEmail, setNewsletterEmail] = useState("");
+  const [newsletterStatus, setNewsletterStatus] = useState("");
+  const [newsletterSubmitting, setNewsletterSubmitting] = useState(false);
   const [searchParams] = useSearchParams();
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const searchQuery = searchParams.get("q") || "";
@@ -26,6 +29,17 @@ export function HomePage() {
       .then(setCategories)
       .catch(() => setCategories([]));
   }, []);
+
+  useEffect(() => {
+    const status = searchParams.get("subscription");
+    if (status === "confirmed") {
+      setNewsletterStatus("구독이 완료되었습니다. 새 게시글 알림을 이메일로 보내드립니다.");
+    } else if (status === "unsubscribed") {
+      setNewsletterStatus("구독이 취소되었습니다.");
+    } else if (status === "invalid") {
+      setNewsletterStatus("유효하지 않거나 이미 처리된 구독 링크입니다.");
+    }
+  }, [searchParams]);
 
   const loadPosts = useCallback(async (nextPage: number, replace = false) => {
     if (replace) {
@@ -72,6 +86,39 @@ export function HomePage() {
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, [last, loading, loadingMore, loadPosts, page]);
+
+  const submitSubscription = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!newsletterEmail.trim() || newsletterSubmitting) return;
+    setNewsletterSubmitting(true);
+    setNewsletterStatus("");
+    try {
+      const response = await subscribeToNewsletter(newsletterEmail.trim());
+      setNewsletterStatus(response.message);
+    } catch (err) {
+      setNewsletterStatus("구독 신청을 처리하지 못했습니다.");
+    } finally {
+      setNewsletterSubmitting(false);
+    }
+  };
+
+  const cancelSubscription = async () => {
+    if (!newsletterEmail.trim() || newsletterSubmitting) {
+      setNewsletterStatus("구독을 취소할 이메일 주소를 입력해주세요.");
+      return;
+    }
+    setNewsletterSubmitting(true);
+    setNewsletterStatus("");
+    try {
+      const response = await unsubscribeFromNewsletter(newsletterEmail.trim());
+      setNewsletterStatus(response.message);
+      setNewsletterEmail("");
+    } catch (err) {
+      setNewsletterStatus("구독 취소를 처리하지 못했습니다.");
+    } finally {
+      setNewsletterSubmitting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -155,6 +202,51 @@ export function HomePage() {
           )}
         </div>
       )}
+
+      <section className="mt-16 rounded-3xl bg-slate-950 p-8 md:p-12 text-center text-white relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+          <div className="absolute top-10 left-10 w-48 h-48 bg-blue-500 rounded-full blur-[100px]" />
+          <div className="absolute bottom-10 right-10 w-72 h-72 bg-purple-500 rounded-full blur-[100px]" />
+        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="relative z-10"
+        >
+          <h2 className="text-2xl md:text-3xl font-bold mb-3 tracking-tight">새 포스팅을 이메일로 받아보세요</h2>
+          <p className="text-slate-400 mb-6 max-w-md mx-auto text-sm leading-relaxed">
+            신규 게시글이 발행되면 알림 메일을 보내드립니다.
+            <br className="hidden sm:inline" /> 구독 확인 메일의 링크를 눌러야 등록이 완료됩니다.
+          </p>
+          <form onSubmit={submitSubscription} className="flex flex-col sm:flex-row max-w-md mx-auto gap-2.5 mb-3">
+            <input
+              type="email"
+              value={newsletterEmail}
+              onChange={event => setNewsletterEmail(event.target.value)}
+              placeholder="이메일 주소"
+              required
+              className="flex-1 rounded-xl bg-white/5 border border-white/10 px-4 py-2.5 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium"
+            />
+            <button
+              type="submit"
+              disabled={newsletterSubmitting}
+              className="rounded-xl bg-white px-5 py-2.5 font-bold text-slate-900 text-sm hover:bg-slate-100 transition-all disabled:opacity-60 shadow-md"
+            >
+              {newsletterSubmitting ? "처리 중..." : "구독하기"}
+            </button>
+          </form>
+          <button
+            type="button"
+            onClick={cancelSubscription}
+            disabled={newsletterSubmitting}
+            className="text-slate-500 text-[10px] font-bold hover:text-slate-300 transition-colors uppercase tracking-widest disabled:opacity-60"
+          >
+            구독 취소 (Unsubscribe)
+          </button>
+          {newsletterStatus && <p className="mt-5 text-sm font-medium text-blue-200">{newsletterStatus}</p>}
+        </motion.div>
+      </section>
     </div>
   );
 }

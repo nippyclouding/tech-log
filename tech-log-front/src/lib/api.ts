@@ -33,6 +33,10 @@ export interface CurrentUser {
   avatar?: string;
 }
 
+export interface MessageResponse {
+  message: string;
+}
+
 async function request<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
     credentials: "include",
@@ -85,4 +89,18 @@ export function createComment(postId: string | number, content: string) {
 
 export function fetchCurrentUser() {
   return request<CurrentUser>("/api/auth/me");
+}
+
+export function subscribeToNewsletter(email: string) {
+  return request<MessageResponse>("/api/subscriptions", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function unsubscribeFromNewsletter(email: string) {
+  return request<MessageResponse>("/api/subscriptions/unsubscribe-request", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
 }
