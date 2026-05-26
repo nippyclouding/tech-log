@@ -4,7 +4,7 @@
 
 이 문서는 `techlog.site` 서비스의 운영 배포 구조, 현재까지 결정한 운영 방식, AWS EC2 준비 과정에서 수행한 작업, 최초 배포 및 이후 CI/CD 흐름을 기록한다.
 
-기록 기준일은 `2026-05-26`이다.
+기록 기준일은 `2026-05-27`이다. 일상 운영 점검과 데이터 보존 정책은 [`운영가이드.md`](./운영가이드.md)에 별도로 정리한다.
 
 ## 2. 확정한 운영 방안
 
@@ -184,17 +184,24 @@ GitHub Actions 검증 및 이미지 publish
 | 13 | ACME challenge `404` 원인 조사 및 Nginx 설정 수동 반영 | webroot 파일이 HTTP `200 OK`로 제공되는 것을 확인 |
 | 14 | Certbot webroot 방식으로 `techlog.site` 인증서 발급 | HTTPS 적용 완료, 인증서 만료일 `2026-08-24` |
 | 15 | Certbot 컨테이너 기동 및 HTTPS 접속 확인 | 자동 갱신 점검이 가능한 운영 상태 확보 |
+| 16 | GitHub Actions `production` secrets와 Repository Actions variable `DEPLOY_ENABLED=true` 설정 | `main` push 자동 배포 동작 확인 |
+| 17 | Gmail SMTP 앱 비밀번호 설정 후 구독 확인 메일 발송/링크 처리 확인 | 이메일 구독 발송 동작 확인 |
+| 18 | 접근 로그에 request ID와 서버 오류 상세 표시 추가 | 관리자 로그 화면에서 오류 추적 가능 |
+| 19 | 기존 PostgreSQL volume에 접근 로그 상세 컬럼 migration 적용 | 새 backend schema validation 통과 |
+| 20 | PostgreSQL 게시글 검색 null 파라미터 쿼리 수정 후 `main` push | 배포 후 공개/관리자 게시글 목록 응답 확인 필요 |
+| 21 | 관리자 게시글 편집 목록을 페이지 조회 방식으로 수정 후 `main` push | 배포 후 편집 목록 로딩 확인 필요 |
+| 22 | 대괄호 등 Markdown 문자가 있는 업로드 파일명 처리 수정 후 `main` push | 배포 후 해당 이미지 재삽입/표시 확인 필요 |
 
-### 5.2 아직 수행 완료가 확인되지 않은 작업
+### 5.2 운영 후속 작업
 
-아래 항목은 이 문서 작성 시점에 실행 완료 여부가 확인되지 않았으므로, 최초 공개 배포를 위해 이어서 수행한다.
+서비스 공개와 자동 배포, Gmail SMTP 연결은 완료되었다. 아래 항목은 운영 안정성을 높이기 위해 이어서 수행하거나 확인할 작업이다.
 
 | 순서 | 작업 |
 | --- | --- |
-| 1 | Nginx 템플릿 변환 수정이 포함된 `docker-compose.yml`을 GitHub에 push하여 이후 재배포에도 반영 |
-| 2 | 댓글 GitHub 로그인을 사용할 경우 GitHub OAuth callback 및 credentials 동작 확인 |
-| 3 | 이메일 알림을 사용할 경우 Gmail SMTP 앱 비밀번호 등 메일 값을 준비하고 `MAIL_ENABLED=true`로 전환 |
-| 4 | GitHub Actions `production` secrets 및 Repository variable `DEPLOY_ENABLED=true` 설정 |
+| 1 | 댓글 GitHub 로그인을 사용할 경우 GitHub OAuth callback 및 credentials 동작을 운영 주소에서 확인 |
+| 2 | PostgreSQL `pg_dump`와 업로드 이미지의 EC2 외부 정기 백업을 구성 |
+| 3 | AWS Budgets 및 Cost Anomaly Detection을 설정하여 비용 급증을 탐지 |
+| 4 | schema 변경이 늘어나기 전에 Flyway 도입 여부를 결정 |
 
 ## 6. 실제 실행한 EC2 명령과 의미
 
@@ -524,34 +531,17 @@ docker compose --env-file .env.prod ps
 curl -I https://techlog.site
 ```
 
-## 8. CI/CD 최종 활성화 절차
+## 8. CI/CD 운영 설정
 
-최초 HTTPS 배포가 성공한 다음 GitHub Repository의 `production` Environment에 아래 값을 등록한다.
+최초 HTTPS 배포 후 GitHub Repository의 `production` Environment와 Repository Actions variable이 구성되었고, `main` push 자동 배포가 동작하는 상태이다.
 
-### 8.1 현재 push가 필요한 이유
+### 8.1 자동 배포 시 주의사항
 
-HTTPS 최초 발급 중 발견한 Nginx 템플릿 변환 수정은 로컬 프로젝트의 `docker-compose.yml`에 반영되어 있다. EC2에서 실행 중인 Nginx에는 수동으로 올바른 설정을 적용했지만, 이 코드 수정이 GitHub와 이후 EC2 배포에 반영되지 않으면 컨테이너가 재생성될 때 ACME 경로 설정이 다시 사라질 수 있다.
+HTTPS 최초 발급 과정에서 발견한 Nginx 템플릿 변환 수정은 이미 `docker-compose.yml`과 배포 이미지에 반영되었다. 이후 코드를 변경하면 `main` push로 GitHub Actions 검증, 이미지 publish, EC2 배포가 순서대로 수행된다.
 
-따라서 다음 배포 전에는 반드시 수정 파일을 commit하고 GitHub `main`에 push해야 한다.
+DB schema 변경을 포함한 배포에서는 새 backend를 올리기 전에 migration이 실행되어야 한다. Workflow는 EC2에서 대상 커밋을 먼저 checkout한 다음 같은 커밋의 `deploy/deploy.sh`를 실행하도록 수정되어, 배포 스크립트와 애플리케이션 이미지의 버전이 달라지는 문제를 방지한다.
 
-```bash
-git status --short
-git add docker-compose.yml tech-log-front/src/components/common/Header.tsx tech-log-front/src/pages/HomePage.tsx project-resource/documents/deploy.md
-git commit -m "Fix nginx certificate setup and update deployment notes"
-git push origin main
-```
-
-이 push는 GitHub Actions에서 수정된 Docker 이미지를 publish한다. EC2 자동 배포를 바로 사용할 경우에는 아래 environment secrets와 Repository Actions variable `DEPLOY_ENABLED=true` 설정을 먼저 완료한 다음 push한다. 자동 배포 설정을 아직 완료하지 않을 경우에는 push 후 EC2에서 새 Compose 코드를 반영하고 컨테이너를 재생성한다.
-
-```bash
-cd /home/ubuntu/tech-log
-git pull origin main
-docker compose --env-file .env.prod pull nginx backend
-docker compose --env-file .env.prod up -d --force-recreate nginx backend certbot
-curl -I https://techlog.site
-```
-
-`data/certbot/conf`, PostgreSQL volume, 업로드 이미지 volume, `.env.prod`는 이 컨테이너 재생성으로 삭제하지 않는다.
+최근 운영 DB에는 `deploy/migrations/V20260527__access_log_error_details.sql`이 적용되어 있다. 이 migration은 `IF NOT EXISTS`를 사용하여 반복 실행 가능하다. `ddl.sql`과 `index.sql`은 기존 PostgreSQL volume 재배포 시 자동 재실행되지 않으며, 빈 DB를 최초 초기화할 때만 적용된다.
 
 ### 8.2 Secrets
 
@@ -688,6 +678,17 @@ RDS가 아닌 EC2 내부 컨테이너 DB를 사용하므로 최초 공개 운영
 2. PostgreSQL 논리 백업(`pg_dump`)을 정기 생성한다.
 3. 논리 백업 파일은 같은 EC2 디스크만이 아닌 S3 등의 별도 저장소에 보관한다.
 4. 인스턴스 타입 변경이나 큰 배포 작업 전에는 수동 백업을 수행한다.
+
+### 9.4 감사 로그 보존 정책
+
+Backend의 `AuditLogRetentionService`는 기본적으로 매일 오전 `03:15` (`Asia/Seoul`)에 90일보다 오래된 `ACCESS_LOGS`, `LOGIN_LOGS` 데이터를 삭제한다.
+
+```env
+AUDIT_LOG_RETENTION_DAYS=90
+AUDIT_LOG_CLEANUP_CRON=0 15 3 * * *
+```
+
+`ACCESS_LOGS`에는 서버 오류 발생 시 request ID, 오류 타입, 오류 메시지, 제한된 stack trace가 포함될 수 있다. `LOGIN_LOGS`에는 로그인 결과, login ID, IP가 포함된다. 게시글, 댓글, 이메일 구독자, 업로드 이미지, PostgreSQL volume은 이 스케줄러로 삭제되지 않는다. 상세 운영 기준은 [`운영가이드.md`](./운영가이드.md)를 따른다.
 
 ## 10. 관련 프로젝트 파일
 
