@@ -54,6 +54,8 @@ Certificates and renewal state are stored under `data/certbot/` on the EC2 insta
 
 The workflow in `.github/workflows/deploy.yml` runs the frontend checks and backend tests on each push to `main`. If verification succeeds, it builds the `nginx` and `backend` Docker images in GitHub Actions, pushes both a commit-SHA tag and `latest` tag to GHCR, then connects to EC2 over SSH. EC2 invokes `deploy/deploy.sh` and pulls the exact commit-SHA images.
 
+The SSH deployment step checks out the target commit before invoking `deploy/deploy.sh`. This ensures that a deployment which changes the deployment script or introduces a database migration executes the script and migrations from the same commit as the new application image.
+
 Before enabling the workflow:
 
 1. Commit and push the deployment files, then clone the repository once on EC2, for example under `/home/ubuntu/tech-log`.

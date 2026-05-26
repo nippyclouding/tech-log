@@ -133,6 +133,8 @@ certbot/certbot:latest
 5. Repository Actions variable `DEPLOY_ENABLED=true`가 설정된 이후에는 GitHub Actions가 `production` Environment의 secrets를 사용해 SSH로 EC2에 접속한다.
 6. EC2의 [`deploy/deploy.sh`](../../deploy/deploy.sh)가 해당 커밋 SHA의 이미지를 pull하고 컨테이너를 갱신한다.
 
+GitHub Actions의 SSH 단계는 `deploy.sh`를 호출하기 전에 먼저 대상 커밋을 checkout한다. 배포 스크립트 자체와 backend 이미지가 같은 커밋에서 함께 변경되는 경우에도 새 스크립트의 DB migration 등이 새 backend 기동 전에 실행되도록 하기 위함이다.
+
 GHCR에는 이미 다음 패키지가 publish된 상태임을 확인했다.
 
 ```text

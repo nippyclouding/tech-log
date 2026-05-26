@@ -117,4 +117,4 @@ jobs:
           SSH_PORT="${EC2_SSH_PORT:-22}"
           printf -v DEPLOY_DIR '%q' "$EC2_DEPLOY_PATH"
           ssh -i ~/.ssh/ec2_deploy_key -p "$SSH_PORT" "$EC2_SSH_USER@$EC2_HOST" \
-            "cd -- $DEPLOY_DIR && DEPLOY_SHA='$DEPLOY_SHA' DEPLOY_BRANCH='main' ./deploy/deploy.sh"
+            "cd -- $DEPLOY_DIR && if ! git diff --quiet || ! git diff --cached --quiet; then printf 'Tracked files have local changes on the server; refusing to overwrite them.\n' >&2; exit 1; fi; git fetch --prune origin 'refs/heads/main:refs/remotes/origin/main' && git checkout --detach '$DEPLOY_SHA' && DEPLOY_SHA='$DEPLOY_SHA' DEPLOY_BRANCH='main' ./deploy/deploy.sh"
