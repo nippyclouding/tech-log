@@ -12,8 +12,19 @@ import org.springframework.data.repository.query.Param;
 public interface BoardRepository extends JpaRepository<Board, Long> {
 
     @EntityGraph(attributePaths = {"boardCategories.category", "images"})
-    @Query("select distinct b from Board b left join b.boardCategories bc left join bc.category c where (:category is null or c.name = :category) and (:keyword is null or lower(b.title) like lower(concat('%', :keyword, '%')) or lower(b.content) like lower(concat('%', :keyword, '%')) or lower(c.name) like lower(concat('%', :keyword, '%')))")
-    Page<Board> search(@Param("category") String category, @Param("keyword") String keyword, Pageable pageable);
+    Page<Board> findAll(Pageable pageable);
+
+    @EntityGraph(attributePaths = {"boardCategories.category", "images"})
+    @Query("select distinct b from Board b join b.boardCategories bc join bc.category c where c.name = :category")
+    Page<Board> findByCategory(@Param("category") String category, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"boardCategories.category", "images"})
+    @Query("select distinct b from Board b left join b.boardCategories bc left join bc.category c where lower(b.title) like concat('%', lower(:keyword), '%') or lower(b.content) like concat('%', lower(:keyword), '%') or lower(c.name) like concat('%', lower(:keyword), '%')")
+    Page<Board> findByKeyword(@Param("keyword") String keyword, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"boardCategories.category", "images"})
+    @Query("select distinct b from Board b join b.boardCategories bc join bc.category c where c.name = :category and (lower(b.title) like concat('%', lower(:keyword), '%') or lower(b.content) like concat('%', lower(:keyword), '%') or lower(c.name) like concat('%', lower(:keyword), '%'))")
+    Page<Board> findByCategoryAndKeyword(@Param("category") String category, @Param("keyword") String keyword, Pageable pageable);
 
     @EntityGraph(attributePaths = {"boardCategories.category", "images"})
     Optional<Board> findById(Long id);

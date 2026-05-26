@@ -23,6 +23,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -51,7 +52,19 @@ public class BoardService {
     public PageResponse<PostSummaryResponse> search(String category, String keyword, int page, int size) {
         validatePublicPaging(page, size);
         PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "updatedAt"));
-        return PageResponse.from(boardRepository.search(blankToNull(category), blankToNull(keyword), pageRequest).map(this::toSummary));
+        String categoryFilter = blankToNull(category);
+        String keywordFilter = blankToNull(keyword);
+        Page<Board> boards;
+        if (categoryFilter == null && keywordFilter == null) {
+            boards = boardRepository.findAll(pageRequest);
+        } else if (categoryFilter == null) {
+            boards = boardRepository.findByKeyword(keywordFilter, pageRequest);
+        } else if (keywordFilter == null) {
+            boards = boardRepository.findByCategory(categoryFilter, pageRequest);
+        } else {
+            boards = boardRepository.findByCategoryAndKeyword(categoryFilter, keywordFilter, pageRequest);
+        }
+        return PageResponse.from(boards.map(this::toSummary));
     }
 
     @Transactional(readOnly = true)

@@ -3,6 +3,7 @@ package com.nippyclouding.tech_log_back.board.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -36,6 +37,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -106,7 +109,41 @@ class BoardServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("size must be between 1 and 50.");
 
-        verify(boardRepository, never()).search(any(), any(), any());
+        verify(boardRepository, never()).findAll(any(Pageable.class));
+        verify(boardRepository, never()).findByCategory(any(), any());
+        verify(boardRepository, never()).findByKeyword(any(), any());
+        verify(boardRepository, never()).findByCategoryAndKeyword(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("필터가 없는 공개 목록 조회는 null 검색 파라미터가 없는 쿼리를 사용한다")
+    void search_withoutFilters_usesUnfilteredQuery() {
+        given(boardRepository.findAll(any(Pageable.class))).willReturn(Page.empty());
+
+        boardService.search(null, null, 0, 5);
+
+        verify(boardRepository).findAll(any(Pageable.class));
+        verify(boardRepository, never()).findByKeyword(any(), any());
+    }
+
+    @Test
+    @DisplayName("검색어만 있는 조회는 검색어 쿼리를 사용한다")
+    void search_withKeyword_usesKeywordQuery() {
+        given(boardRepository.findByKeyword(any(), any(Pageable.class))).willReturn(Page.empty());
+
+        boardService.search(null, "spring", 0, 5);
+
+        verify(boardRepository).findByKeyword(eq("spring"), any(Pageable.class));
+    }
+
+    @Test
+    @DisplayName("카테고리와 검색어가 모두 있으면 결합 쿼리를 사용한다")
+    void search_withCategoryAndKeyword_usesCombinedQuery() {
+        given(boardRepository.findByCategoryAndKeyword(any(), any(), any(Pageable.class))).willReturn(Page.empty());
+
+        boardService.search("Java", "spring", 0, 5);
+
+        verify(boardRepository).findByCategoryAndKeyword(eq("Java"), eq("spring"), any(Pageable.class));
     }
 
     @Test
