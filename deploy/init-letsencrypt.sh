@@ -33,7 +33,12 @@ CERTIFICATE_PATH="./data/certbot/conf/live/$DOMAIN/fullchain.pem"
 
 mkdir -p "./data/certbot/conf/live/$DOMAIN" "./data/certbot/www"
 
-if [ -f "$CERTIFICATE_PATH" ]; then
+certificate_exists() {
+    [ -f "$CERTIFICATE_PATH" ] || docker compose --env-file "$ENV_FILE" run --rm --no-deps --entrypoint /bin/sh certbot -c \
+        "test -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem"
+}
+
+if certificate_exists; then
     printf 'An existing certificate was found for %s; starting the deployment.\n' "$DOMAIN"
     docker compose --env-file "$ENV_FILE" pull nginx backend postgres certbot
     docker compose --env-file "$ENV_FILE" up -d --remove-orphans

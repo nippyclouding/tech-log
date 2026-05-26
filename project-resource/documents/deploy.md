@@ -424,6 +424,16 @@ Key is saved at:         /etc/letsencrypt/live/techlog.site/privkey.pem
 This certificate expires on 2026-08-24.
 ```
 
+Certbot이 만든 실제 인증서 디렉터리는 host의 `ubuntu` 사용자에게 직접 조회 권한이 없을 수 있다. 이 경우 HTTPS는 정상인데 `deploy.sh`가 host에서 `[ -f data/certbot/conf/live/<DOMAIN>/fullchain.pem ]`를 검사하면 인증서가 없다고 오판한다. 이후 배포 스크립트는 host 권한을 넓히지 않고, 동일 인증서 볼륨을 mount한 Certbot 컨테이너 내부에서 파일 존재를 검사하도록 수정하였다.
+
+확인용 명령:
+
+```bash
+cd /home/ubuntu/tech-log
+sudo ls -la data/certbot/conf/live/techlog.site/
+docker compose --env-file .env.prod run --rm --no-deps --entrypoint /bin/sh certbot -c 'test -f /etc/letsencrypt/live/techlog.site/fullchain.pem && echo certificate-ok'
+```
+
 ## 7. 이어서 실행할 최초 배포 절차
 
 ### 7.1 완료된 Elastic IP와 가비아 DNS 설정

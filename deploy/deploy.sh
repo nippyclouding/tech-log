@@ -43,12 +43,18 @@ printf 'Deploying commit %s.\n' "$(git rev-parse --short "$TARGET_REF")"
 git checkout --detach "$TARGET_REF"
 
 DOMAIN="$(sed -n 's/^DOMAIN=//p' "$ENV_FILE" | tail -n 1)"
-if [ -z "$DOMAIN" ] || [ ! -f "./data/certbot/conf/live/$DOMAIN/fullchain.pem" ]; then
+
+certificate_exists() {
+    docker compose --env-file "$ENV_FILE" run --rm --no-deps --entrypoint /bin/sh certbot -c \
+        "test -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem"
+}
+
+docker compose --env-file "$ENV_FILE" config --quiet
+if [ -z "$DOMAIN" ] || ! certificate_exists; then
     printf 'No TLS certificate found for DOMAIN=%s. Run ./deploy/init-letsencrypt.sh once on EC2 first.\n' "$DOMAIN" >&2
     exit 1
 fi
 
-docker compose --env-file "$ENV_FILE" config --quiet
 docker compose --env-file "$ENV_FILE" pull nginx backend postgres certbot
 docker compose --env-file "$ENV_FILE" up -d --remove-orphans
 docker compose --env-file "$ENV_FILE" ps

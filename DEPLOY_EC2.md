@@ -116,3 +116,5 @@ docker compose --env-file .env.prod run --rm --entrypoint certbot certbot renew 
 ```
 
 The Certbot service checks renewal twice a day. Nginx reloads periodically to begin serving any renewed certificate.
+
+If HTTPS is active but an automated deployment reports `No TLS certificate found`, do not issue a replacement certificate immediately. Certbot may have created `data/certbot/conf/live/<DOMAIN>` with permissions readable inside the container but not directly by the `ubuntu` host user. The deployment scripts validate existing certificates from the Certbot container so that the certificate can remain protected on the host.
