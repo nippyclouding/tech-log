@@ -94,7 +94,7 @@ public class NewsletterEmailService {
             message.setText(content);
             mailSender.send(message);
         } catch (RuntimeException e) {
-            log.warn("Newsletter email delivery failed for {}", recipient, e);
+            log.warn("Newsletter email delivery failed for {}", maskEmail(recipient), e);
         }
     }
 
@@ -117,5 +117,16 @@ public class NewsletterEmailService {
 
     private String link(String path, String token) {
         return frontendOrigin + path + "?token=" + URLEncoder.encode(token, StandardCharsets.UTF_8);
+    }
+
+    private String maskEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return "unknown";
+        }
+        int separator = email.indexOf('@');
+        if (separator <= 0) {
+            return "***";
+        }
+        return email.charAt(0) + "***" + email.substring(separator);
     }
 }

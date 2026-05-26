@@ -44,8 +44,6 @@ export function Header() {
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center space-x-8">
             <Link to="/" className="text-sm font-medium text-gray-600 hover:text-black transition-colors">Posts</Link>
-            <Link to="/about" className="text-sm font-medium text-gray-600 hover:text-black transition-colors">About</Link>
-            <Link to="/projects" className="text-sm font-medium text-gray-600 hover:text-black transition-colors">Project</Link>
           </nav>
         </div>
 

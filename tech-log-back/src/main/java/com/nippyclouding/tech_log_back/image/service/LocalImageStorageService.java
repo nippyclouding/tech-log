@@ -40,7 +40,8 @@ public class LocalImageStorageService {
         try {
             Files.createDirectories(uploadDir);
         } catch (IOException e) {
-            throw new BusinessException(ErrorCode.INVALID_IMAGE_FILE, "Could not create image upload directory.");
+            log.error("Could not create image upload directory: {}", uploadDir, e);
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
 
         List<StoredImage> storedImages = new ArrayList<>();
@@ -78,7 +79,8 @@ public class LocalImageStorageService {
             Files.copy(inputStream, target, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             deleteOne(uploadDir, storedName);
-            throw new BusinessException(ErrorCode.INVALID_IMAGE_FILE, "Could not save image file.");
+            log.error("Could not store uploaded image in directory: {}", uploadDir, e);
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
 
         return new StoredImage(

@@ -1,7 +1,10 @@
 package com.nippyclouding.tech_log_back.global.exception;
 
+import com.nippyclouding.tech_log_back.global.web.RequestIdFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
@@ -12,6 +15,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ErrorResponse> handleBusinessException(BusinessException ex, HttpServletRequest request) {
@@ -60,6 +65,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleException(Exception ex, HttpServletRequest request) {
+        log.error(
+                "Unhandled request failure requestId={} method={} uri={}",
+                RequestIdFilter.getRequestId(request),
+                request.getMethod(),
+                request.getRequestURI(),
+                ex
+        );
         ErrorCode errorCode = ErrorCode.INTERNAL_SERVER_ERROR;
         return ResponseEntity
                 .status(errorCode.getStatus())

@@ -5,9 +5,12 @@ import com.nippyclouding.tech_log_back.global.exception.ErrorCode;
 import com.nippyclouding.tech_log_back.global.exception.ErrorResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nippyclouding.tech_log_back.global.web.ClientIpResolver;
+import com.nippyclouding.tech_log_back.global.web.RequestIdFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.LocalDateTime;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -30,6 +33,8 @@ import lombok.RequiredArgsConstructor;
 @Configuration
 @RequiredArgsConstructor
 public class SecurityConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
 
     private final ObjectMapper objectMapper;
     private final LoginLogService loginLogService;
@@ -54,11 +59,11 @@ public class SecurityConfig {
                         .usernameParameter("adminId")
                         .passwordParameter("adminPassword")
                         .successHandler((request, response, authentication) -> {
-                            loginLogService.record("admin-console-success", authentication.getName(), ClientIpResolver.resolve(request));
+                            recordLoginSafely("admin-console-success", authentication.getName(), request);
                             response.sendRedirect("/admin-console");
                         })
                         .failureHandler((request, response, exception) -> {
-                            loginLogService.record("admin-console-failure", request.getParameter("adminId"), ClientIpResolver.resolve(request));
+                            recordLoginSafely("admin-console-failure", request.getParameter("adminId"), request);
                             response.sendRedirect("/admin-console?error");
                         })
                         .permitAll()
@@ -71,11 +76,11 @@ public class SecurityConfig {
                                 GithubUser githubUser = GithubUser.from(oauth2User);
                                 loginId = githubUser.login().isBlank() ? githubUser.name() : githubUser.login();
                             }
-                            loginLogService.record("github-success", loginId, ClientIpResolver.resolve(request));
+                            recordLoginSafely("github-success", loginId, request);
                             response.sendRedirect("/");
                         })
                         .failureHandler((request, response, exception) -> {
-                            loginLogService.record("github-failure", "unknown", ClientIpResolver.resolve(request));
+                            recordLoginSafely("github-failure", "unknown", request);
                             response.sendRedirect("/");
                         })
                 )
@@ -132,5 +137,18 @@ public class SecurityConfig {
                 LocalDateTime.now(),
                 List.of()
         ));
+    }
+
+    private void recordLoginSafely(String provider, String loginId, jakarta.servlet.http.HttpServletRequest request) {
+        try {
+            loginLogService.record(provider, loginId, ClientIpResolver.resolve(request));
+        } catch (RuntimeException ex) {
+            log.error(
+                    "Failed to persist login audit log requestId={} provider={}",
+                    RequestIdFilter.getRequestId(request),
+                    provider,
+                    ex
+            );
+        }
     }
 }

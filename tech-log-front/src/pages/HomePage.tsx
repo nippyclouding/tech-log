@@ -136,7 +136,7 @@ export function HomePage() {
           Tech Insights & <span className="text-blue-600">Journey</span>
         </h1>
         <p className="text-slate-500 text-lg max-w-2xl mx-auto">
-          개발 경험과 지식을 기록합니다. 스크롤하면 5개씩 이어서 불러옵니다.
+          개발 경험과 지식을 기록합니다.
         </p>
       </section>
 

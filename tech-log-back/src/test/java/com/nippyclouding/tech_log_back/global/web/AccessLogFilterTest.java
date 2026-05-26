@@ -1,5 +1,8 @@
 package com.nippyclouding.tech_log_back.global.web;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -73,6 +76,28 @@ class AccessLogFilterTest {
         filter("GET", "/api/admin/access-logs", 500);
 
         verify(accessLogService).record("127.0.0.1", "/api/admin/access-logs", "GET", 500);
+    }
+
+    @Test
+    void recordsEscapingRequestExceptionAsServerFailure() {
+        AccessLogFilter filter = new AccessLogFilter(accessLogService);
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/posts");
+        request.setRemoteAddr("127.0.0.1");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        assertThrows(RuntimeException.class, () -> filter.doFilter(request, response, (servletRequest, servletResponse) -> {
+            throw new RuntimeException("request failed");
+        }));
+
+        verify(accessLogService).record("127.0.0.1", "/api/posts", "GET", 500);
+    }
+
+    @Test
+    void doesNotFailCompletedRequestWhenAuditPersistenceFails() {
+        doThrow(new RuntimeException("database unavailable"))
+                .when(accessLogService).record("127.0.0.1", "/api/admin/posts/1", "PUT", 200);
+
+        assertDoesNotThrow(() -> filter("PUT", "/api/admin/posts/1", 200));
     }
 
     private void filter(String method, String path, int status) throws Exception {

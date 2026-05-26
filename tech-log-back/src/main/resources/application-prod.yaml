@@ -59,6 +59,13 @@ app:
     enabled: ${MAIL_ENABLED:false}
     from: ${MAIL_FROM:${MAIL_USERNAME:}}
     site-name: ${MAIL_SITE_NAME:Tech Log}
+  audit-log:
+    retention-days: ${AUDIT_LOG_RETENTION_DAYS:90}
+    cleanup-cron: ${AUDIT_LOG_CLEANUP_CRON:0 15 3 * * *}
+
+logging:
+  pattern:
+    level: "%5p [requestId:%X{requestId:-}]"
 
 springdoc:
   api-docs:
