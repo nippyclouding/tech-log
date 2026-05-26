@@ -769,7 +769,7 @@ public class AdminConsoleController {
 
                     function inlineMarkdown(text) {
                       return text
-                        .replace(/\\[이미지: ([^\\]]+)\\]\\((pending-image:[^)]+)\\)/g, (match, alt, url) => safeImage(url, alt))
+                        .replace(/!?\\[([^\\n]*)\\]\\((pending-image:\\d+)\\)/g, (match, alt, url) => safeImage(url, alt))
                         .replace(/!\\[([^\\]]*)\\]\\(([^)]+)\\)/g, (match, alt, url) => safeImage(url, alt))
                         .replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^)]+)\\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
                         .replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>')
@@ -794,7 +794,7 @@ public class AdminConsoleController {
                         return;
                       }
                       const markdown = Array.from(input.files)
-                        .map((file, index) => `\\n\\n[이미지: ${file.name}](pending-image:${index})\\n\\n`)
+                        .map((file, index) => `\\n\\n![이미지 ${index + 1}](pending-image:${index})\\n\\n`)
                         .join('');
                       const start = textarea.selectionStart;
                       const end = textarea.selectionEnd;

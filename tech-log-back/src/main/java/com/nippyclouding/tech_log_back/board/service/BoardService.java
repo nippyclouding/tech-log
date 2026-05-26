@@ -220,7 +220,7 @@ public class BoardService {
             StoredImage image = images.get(i);
             replaced = replaced.replace(
                     "[이미지: " + image.originalName() + "](pending-image:" + i + ")",
-                    "![" + image.originalName() + "](" + image.publicUrl() + ")"
+                    "![이미지 " + (i + 1) + "](" + image.publicUrl() + ")"
             );
             replaced = replaced.replace("pending-image:" + i, image.publicUrl());
         }

@@ -230,8 +230,40 @@ class BoardServiceTest {
 
         // then
         assertThat(response.content())
-                .contains("![image-0.png](/image/0.png)")
-                .contains("![image-1.png](/image/1.png)");
+                .contains("![이미지 1](/image/0.png)")
+                .contains("![이미지 2](/image/1.png)");
+    }
+
+    @Test
+    @DisplayName("대괄호가 있는 파일명도 안전한 이미지 alt 텍스트로 치환한다")
+    void create_replacesBracketedFilenameWithSafeImageAltText() {
+        List<StoredImage> images = List.of(new StoredImage(
+                "/image/poster.jpg",
+                "2. [비트코인서울 2026] 포스터.jpg",
+                "poster.jpg",
+                "image/jpeg",
+                1L,
+                0,
+                true
+        ));
+        given(localImageStorageService.store(any())).willReturn(images);
+        given(boardRepository.save(any(Board.class))).willAnswer(invocation -> invocation.getArgument(0));
+        given(categoryRepository.findByName("Spring")).willReturn(Optional.of(category("Spring")));
+        PostCreateRequest request = new PostCreateRequest(
+                "행사 소개",
+                null,
+                "본문\n\n[이미지: 2. [비트코인서울 2026] 포스터.jpg](pending-image:0)",
+                "Spring",
+                null,
+                List.of(),
+                List.of("Spring")
+        );
+
+        PostDetailResponse response = boardService.create(request, List.of());
+
+        assertThat(response.content())
+                .contains("![이미지 1](/image/poster.jpg)")
+                .doesNotContain("[비트코인서울 2026]");
     }
 
     @Test
@@ -250,7 +282,7 @@ class BoardServiceTest {
 
         // then
         assertThat(response.content())
-                .contains("![image-10.png](/image/10.png)")
+                .contains("![이미지 11](/image/10.png)")
                 .doesNotContain("/image/1.png0");
     }
 
