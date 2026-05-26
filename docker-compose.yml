@@ -1,7 +1,6 @@
 services:
   nginx:
-    build:
-      context: ./tech-log-front
+    image: ghcr.io/nippyclouding/tech-log-nginx:${IMAGE_TAG:-latest}
     container_name: tech-log-nginx
     restart: unless-stopped
     env_file:
@@ -46,8 +45,7 @@ services:
     mem_limit: 128m
 
   backend:
-    build:
-      context: ./tech-log-back
+    image: ghcr.io/nippyclouding/tech-log-backend:${IMAGE_TAG:-latest}
     container_name: tech-log-backend
     restart: unless-stopped
     env_file:

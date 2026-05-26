@@ -6,6 +6,8 @@ ENV_FILE="${ENV_FILE:-.env.prod}"
 DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
 DEPLOY_SHA="${DEPLOY_SHA:-}"
 LOCK_DIR="$ROOT_DIR/.deploy.lock"
+IMAGE_TAG="${DEPLOY_SHA:-latest}"
+export IMAGE_TAG
 
 cd "$ROOT_DIR"
 
@@ -47,8 +49,7 @@ if [ -z "$DOMAIN" ] || [ ! -f "./data/certbot/conf/live/$DOMAIN/fullchain.pem" ]
 fi
 
 docker compose --env-file "$ENV_FILE" config --quiet
-docker compose --env-file "$ENV_FILE" pull postgres certbot
-docker compose --env-file "$ENV_FILE" build --pull nginx backend
+docker compose --env-file "$ENV_FILE" pull nginx backend postgres certbot
 docker compose --env-file "$ENV_FILE" up -d --remove-orphans
 docker compose --env-file "$ENV_FILE" ps
 

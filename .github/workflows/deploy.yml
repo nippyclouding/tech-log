@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 concurrency:
   group: production-deployment
@@ -46,9 +47,50 @@ jobs:
         working-directory: tech-log-back
         run: ./gradlew test --no-daemon
 
+  publish:
+    name: Publish Docker images
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish nginx image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./tech-log-front
+          push: true
+          tags: |
+            ghcr.io/nippyclouding/tech-log-nginx:${{ github.sha }}
+            ghcr.io/nippyclouding/tech-log-nginx:latest
+          cache-from: type=gha,scope=nginx
+          cache-to: type=gha,mode=max,scope=nginx
+
+      - name: Build and publish backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./tech-log-back
+          push: true
+          tags: |
+            ghcr.io/nippyclouding/tech-log-backend:${{ github.sha }}
+            ghcr.io/nippyclouding/tech-log-backend:latest
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
   deploy:
     name: Deploy to EC2
-    needs: verify
+    needs: publish
+    if: vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment: production
     steps:

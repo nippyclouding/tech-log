@@ -2,6 +2,8 @@
 set -eu
 
 ENV_FILE="${ENV_FILE:-.env.prod}"
+IMAGE_TAG="${IMAGE_TAG:-latest}"
+export IMAGE_TAG
 
 if [ ! -f "$ENV_FILE" ]; then
     printf 'Missing %s. Copy .env.prod.example and set deployment values first.\n' "$ENV_FILE" >&2
@@ -33,12 +35,13 @@ mkdir -p "./data/certbot/conf/live/$DOMAIN" "./data/certbot/www"
 
 if [ -f "$CERTIFICATE_PATH" ]; then
     printf 'An existing certificate was found for %s; starting the deployment.\n' "$DOMAIN"
-    docker compose --env-file "$ENV_FILE" up -d --build
+    docker compose --env-file "$ENV_FILE" pull nginx backend postgres certbot
+    docker compose --env-file "$ENV_FILE" up -d --remove-orphans
     exit 0
 fi
 
-printf 'Building nginx and creating a temporary certificate for initial startup.\n'
-docker compose --env-file "$ENV_FILE" build nginx
+printf 'Pulling application images and creating a temporary certificate for initial startup.\n'
+docker compose --env-file "$ENV_FILE" pull nginx backend postgres certbot
 docker compose --env-file "$ENV_FILE" run --rm --no-deps --entrypoint /bin/sh nginx -c \
     "mkdir -p /etc/letsencrypt/live/$DOMAIN && openssl req -x509 -nodes -newkey rsa:2048 -days 1 -keyout /etc/letsencrypt/live/$DOMAIN/privkey.pem -out /etc/letsencrypt/live/$DOMAIN/fullchain.pem -subj /CN=localhost"
 
