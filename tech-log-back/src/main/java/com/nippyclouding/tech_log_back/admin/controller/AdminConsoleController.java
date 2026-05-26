@@ -182,6 +182,8 @@ public class AdminConsoleController {
                     .table th, .table td { text-align: left; border-bottom: 1px solid #f1f5f9; padding: 10px; vertical-align: top; }
                     .table th { color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
                     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+                    .error-summary { color: #b91c1c; cursor: pointer; max-width: 300px; }
+                    .stack-trace { background: #0f172a; color: #e2e8f0; border-radius: 8px; margin-top: 8px; padding: 10px; max-width: 680px; max-height: 260px; overflow: auto; white-space: pre-wrap; font-size: 11px; }
                     .muted { color: #64748b; font-size: 13px; }
                     .status { min-height: 20px; font-size: 13px; font-weight: 700; color: #2563eb; }
                     .pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 14px; }
@@ -413,6 +415,7 @@ public class AdminConsoleController {
                       <section id="tab-logs" class="tab">
                         <div class="panel">
                           <h2>접근 로그</h2>
+                          <p class="muted">서버 오류가 발생한 요청은 오류 상세를 펼쳐 stack trace와 request ID를 확인할 수 있습니다.</p>
                           <div id="accessLogs">Loading...</div>
                           <div class="pager">
                             <button class="secondary" onclick="loadAccessLogs(accessLogPage - 1)">이전</button>
@@ -890,15 +893,24 @@ public class AdminConsoleController {
                       accessLogPage = data.page;
                       document.getElementById('accessLogPageLabel').textContent = `${data.page + 1} / ${Math.max(data.totalPages, 1)}`;
                       document.getElementById('accessLogs').innerHTML = table(
-                        ['IP', 'Method', 'Path', 'Status', 'Time'],
+                        ['IP', 'Method', 'Path', 'Status', 'Request ID', 'Error', 'Time'],
                         data.content.map(log => [
                           `<span class="mono">${escapeHtml(log.ip)}</span>`,
                           log.method,
                           escapeHtml(log.path),
                           log.statusCode,
+                          log.requestId ? `<span class="mono">${escapeHtml(log.requestId)}</span>` : '-',
+                          accessLogError(log),
                           log.timestamp
                         ])
                       );
+                    }
+
+                    function accessLogError(log) {
+                      if (!log.errorType) return '-';
+                      const type = log.errorType.split('.').pop();
+                      const message = log.errorMessage ? ': ' + log.errorMessage : '';
+                      return `<details><summary class="error-summary">${escapeHtml(type + message)}</summary><pre class="stack-trace">${escapeHtml(log.stackTrace || 'stack trace가 저장되지 않았습니다.')}</pre></details>`;
                     }
 
                     async function loadLoginLogs(page) {

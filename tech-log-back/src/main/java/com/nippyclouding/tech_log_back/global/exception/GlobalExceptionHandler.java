@@ -1,6 +1,7 @@
 package com.nippyclouding.tech_log_back.global.exception;
 
 import com.nippyclouding.tech_log_back.global.web.RequestIdFilter;
+import com.nippyclouding.tech_log_back.global.web.RequestFailureDetails;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import org.slf4j.Logger;
@@ -65,6 +66,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleException(Exception ex, HttpServletRequest request) {
+        RequestFailureDetails.capture(request, ex);
         log.error(
                 "Unhandled request failure requestId={} method={} uri={}",
                 RequestIdFilter.getRequestId(request),

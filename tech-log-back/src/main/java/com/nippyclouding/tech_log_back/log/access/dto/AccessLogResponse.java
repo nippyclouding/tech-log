@@ -8,7 +8,11 @@ public record AccessLogResponse(
         String path,
         String method,
         int statusCode,
-        String timestamp
+        String timestamp,
+        String requestId,
+        String errorType,
+        String errorMessage,
+        String stackTrace
 ) {
 
     public static AccessLogResponse from(AccessLog accessLog) {
@@ -18,7 +22,11 @@ public record AccessLogResponse(
                 accessLog.getRequestUri(),
                 accessLog.getMethod().name(),
                 accessLog.getStatusCode(),
-                accessLog.getUpdatedAt().toString()
+                accessLog.getUpdatedAt().toString(),
+                accessLog.getRequestId(),
+                accessLog.getErrorType(),
+                accessLog.getErrorMessage(),
+                accessLog.getStackTrace()
         );
     }
 }

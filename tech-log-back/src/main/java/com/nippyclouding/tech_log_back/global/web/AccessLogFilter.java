@@ -32,6 +32,7 @@ public class AccessLogFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } catch (ServletException | IOException | RuntimeException ex) {
             requestFailed = true;
+            RequestFailureDetails.capture(request, ex);
             throw ex;
         } finally {
             int status = requestFailed && response.getStatus() < 500 ? 500 : response.getStatus();
@@ -42,12 +43,17 @@ public class AccessLogFilter extends OncePerRequestFilter {
     }
 
     private void recordSafely(HttpServletRequest request, int status) {
+        RequestFailureDetails failure = RequestFailureDetails.from(request);
         try {
             accessLogService.record(
                     ClientIpResolver.resolve(request),
                     request.getRequestURI(),
                     request.getMethod(),
-                    status
+                    status,
+                    RequestIdFilter.getRequestId(request),
+                    failure == null ? null : failure.errorType(),
+                    failure == null ? null : failure.errorMessage(),
+                    failure == null ? null : failure.stackTrace()
             );
         } catch (RuntimeException ex) {
             log.error(

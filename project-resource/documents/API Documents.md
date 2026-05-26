@@ -652,7 +652,11 @@ GET /api/admin/access-logs
   "path": "/api/admin/posts/1",
   "method": "PUT",
   "statusCode": 200,
-  "timestamp": "2026-05-24T21:30:00"
+  "timestamp": "2026-05-24T21:30:00",
+  "requestId": "55dc2a12-5bcf-4704-a9e1-a42beef533f9",
+  "errorType": null,
+  "errorMessage": null,
+  "stackTrace": null
 }
 ```
 
@@ -666,6 +670,7 @@ GET /api/admin/access-logs
 | 서버 오류 | `GET`, `POST`, `PUT`, `PATCH`, `DELETE` 요청의 `5xx` |
 
 정상 공개 `GET`, `/api/auth/me`, 정상 로그 조회 API, `OPTIONS`, `HEAD` 요청은 접근 로그에 저장하지 않는다.
+서버 예외로 처리된 `5xx` 로그에는 `requestId`, 예외 타입, 오류 메시지, 최대 8,000자의 stack trace가 함께 저장되며 관리자 콘솔에서만 확인한다.
 
 ### 11.2 로그인 로그 조회
 

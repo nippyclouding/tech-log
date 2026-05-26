@@ -88,6 +88,8 @@ ssh-keyscan -H your-domain.example.com
 
 The workflow never sends `.env.prod`, certificates, database data, or uploaded images through GitHub Actions. Those values remain on EC2.
 
+For existing PostgreSQL volumes, `deploy/deploy.sh` starts PostgreSQL first and applies the idempotent SQL files in `deploy/migrations` before starting a backend image that validates the schema. This is required when an application update adds persisted fields such as administrator-visible error details on access logs.
+
 ## Scaling the EC2 Instance
 
 You can change an EBS-backed EC2 instance from `t3.small` to `t3.medium` later without migrating this deployment. Docker volumes, PostgreSQL data, issued certificates, `.env.prod`, and uploaded images remain on the attached EBS volume across a normal stop/start instance type change.
@@ -118,3 +120,5 @@ docker compose --env-file .env.prod run --rm --entrypoint certbot certbot renew 
 The Certbot service checks renewal twice a day. Nginx reloads periodically to begin serving any renewed certificate.
 
 If HTTPS is active but an automated deployment reports `No TLS certificate found`, do not issue a replacement certificate immediately. Certbot may have created `data/certbot/conf/live/<DOMAIN>` with permissions readable inside the container but not directly by the `ubuntu` host user. The deployment scripts validate existing certificates from the Certbot container so that the certificate can remain protected on the host.
+
+The deployment scripts also strip carriage returns while reading `DOMAIN` and `CERTBOT_EMAIL`; an `.env.prod` file edited with CRLF line endings must not turn an existing certificate path into a false missing-certificate failure.

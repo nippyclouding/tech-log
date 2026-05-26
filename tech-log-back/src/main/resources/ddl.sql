@@ -84,6 +84,10 @@ CREATE TABLE "ACCESS_LOGS" (
                                "request_uri" VARCHAR(500) NOT NULL,
                                "method" VARCHAR(10) NOT NULL,
                                "status_code" INT NOT NULL,
+                               "request_id" VARCHAR(36),
+                               "error_type" VARCHAR(255),
+                               "error_message" VARCHAR(1000),
+                               "stack_trace" TEXT,
 
                                CONSTRAINT "PK_ACCESS_LOGS" PRIMARY KEY ("access_log_id"),
                                CONSTRAINT "CK_ACCESS_LOGS_METHOD"

@@ -426,6 +426,8 @@ This certificate expires on 2026-08-24.
 
 Certbot이 만든 실제 인증서 디렉터리는 host의 `ubuntu` 사용자에게 직접 조회 권한이 없을 수 있다. 이 경우 HTTPS는 정상인데 `deploy.sh`가 host에서 `[ -f data/certbot/conf/live/<DOMAIN>/fullchain.pem ]`를 검사하면 인증서가 없다고 오판한다. 이후 배포 스크립트는 host 권한을 넓히지 않고, 동일 인증서 볼륨을 mount한 Certbot 컨테이너 내부에서 파일 존재를 검사하도록 수정하였다.
 
+또한 `.env.prod`가 CRLF 줄바꿈으로 저장되면 shell에서 읽은 `DOMAIN` 뒤에 `\r`이 붙어 정상 인증서 경로를 찾지 못할 수 있다. 배포 스크립트는 `DOMAIN`과 `CERTBOT_EMAIL`을 읽을 때 이 문자를 제거하도록 구성한다.
+
 확인용 명령:
 
 ```bash
@@ -433,6 +435,8 @@ cd /home/ubuntu/tech-log
 sudo ls -la data/certbot/conf/live/techlog.site/
 docker compose --env-file .env.prod run --rm --no-deps --entrypoint /bin/sh certbot -c 'test -f /etc/letsencrypt/live/techlog.site/fullchain.pem && echo certificate-ok'
 ```
+
+애플리케이션의 영속 컬럼이 추가될 때 기존 PostgreSQL Docker volume은 초기화 SQL을 다시 실행하지 않는다. 현재 자동 배포는 backend를 교체하기 전에 PostgreSQL을 시작하고 `deploy/migrations/V20260527__access_log_error_details.sql`을 실행하여, 관리자 로그 화면에 표시할 request ID와 오류 상세 컬럼을 재실행 가능하게 추가한 뒤 Spring Boot의 schema validation을 통과시킨다.
 
 ## 7. 이어서 실행할 최초 배포 절차
 

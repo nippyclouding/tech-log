@@ -43,12 +43,29 @@ public class AccessLog {
     @Column(name = "status_code", nullable = false)
     private int statusCode;
 
+    @Column(name = "request_id", length = 36)
+    private String requestId;
+
+    @Column(name = "error_type", length = 255)
+    private String errorType;
+
+    @Column(name = "error_message", length = 1000)
+    private String errorMessage;
+
+    @Column(name = "stack_trace", columnDefinition = "TEXT")
+    private String stackTrace;
+
     @Builder
-    public AccessLog(String accessIp, String requestUri, HttpMethodType method, int statusCode) {
+    public AccessLog(String accessIp, String requestUri, HttpMethodType method, int statusCode, String requestId,
+            String errorType, String errorMessage, String stackTrace) {
         this.accessIp = accessIp;
         this.requestUri = requestUri;
         this.method = method;
         this.statusCode = statusCode;
+        this.requestId = requestId;
+        this.errorType = errorType;
+        this.errorMessage = errorMessage;
+        this.stackTrace = stackTrace;
     }
 
 }

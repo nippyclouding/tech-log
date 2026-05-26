@@ -11,7 +11,7 @@ if [ ! -f "$ENV_FILE" ]; then
 fi
 
 read_value() {
-    sed -n "s/^$1=//p" "$ENV_FILE" | tail -n 1
+    sed -n "s/^$1=//p" "$ENV_FILE" | tail -n 1 | tr -d '\r'
 }
 
 DOMAIN="$(read_value DOMAIN)"
@@ -38,15 +38,24 @@ certificate_exists() {
         "test -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem"
 }
 
+apply_database_migrations() {
+    docker compose --env-file "$ENV_FILE" up -d --wait postgres
+    docker compose --env-file "$ENV_FILE" exec -T postgres /bin/sh -c \
+        'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+        < ./deploy/migrations/V20260527__access_log_error_details.sql
+}
+
 if certificate_exists; then
     printf 'An existing certificate was found for %s; starting the deployment.\n' "$DOMAIN"
     docker compose --env-file "$ENV_FILE" pull nginx backend postgres certbot
+    apply_database_migrations
     docker compose --env-file "$ENV_FILE" up -d --remove-orphans
     exit 0
 fi
 
 printf 'Pulling application images and creating a temporary certificate for initial startup.\n'
 docker compose --env-file "$ENV_FILE" pull nginx backend postgres certbot
+apply_database_migrations
 docker compose --env-file "$ENV_FILE" run --rm --no-deps --entrypoint /bin/sh nginx -c \
     "mkdir -p /etc/letsencrypt/live/$DOMAIN && openssl req -x509 -nodes -newkey rsa:2048 -days 1 -keyout /etc/letsencrypt/live/$DOMAIN/privkey.pem -out /etc/letsencrypt/live/$DOMAIN/fullchain.pem -subj /CN=localhost"
 

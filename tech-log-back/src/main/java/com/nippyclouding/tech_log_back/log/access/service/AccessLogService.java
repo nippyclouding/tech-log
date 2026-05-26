@@ -23,7 +23,17 @@ public class AccessLogService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void record(String accessIp, String requestUri, String method, int statusCode) {
-        accessLogRepository.save(new AccessLog(accessIp, requestUri, HttpMethodType.valueOf(method), statusCode));
+    public void record(String accessIp, String requestUri, String method, int statusCode, String requestId,
+            String errorType, String errorMessage, String stackTrace) {
+        accessLogRepository.save(new AccessLog(
+                accessIp,
+                requestUri,
+                HttpMethodType.valueOf(method),
+                statusCode,
+                requestId,
+                errorType,
+                errorMessage,
+                stackTrace
+        ));
     }
 }
