@@ -373,6 +373,11 @@ public class AdminConsoleController {
                           <div class="panel">
                             <h2>게시글 편집</h2>
                             <div id="posts" class="list muted">Loading...</div>
+                            <div class="pager">
+                              <button class="secondary" onclick="loadPosts(postPage - 1)">이전</button>
+                              <span id="postPageLabel" class="muted"></span>
+                              <button class="secondary" onclick="loadPosts(postPage + 1)">다음</button>
+                            </div>
                           </div>
                         </div>
                       </section>
@@ -441,6 +446,7 @@ public class AdminConsoleController {
                     let categoriesCache = [];
                     let selectedCreateCategories = [];
                     let selectedEditCategories = [];
+                    let postPage = 0;
                     let commentPage = 0;
                     let accessLogPage = 0;
                     let loginLogPage = 0;
@@ -453,7 +459,7 @@ public class AdminConsoleController {
                         document.getElementById('tab-' + button.dataset.tab).classList.add('active');
                         document.getElementById('pageTitle').textContent = button.textContent;
                         document.getElementById('postSubnav').classList.toggle('active', button.dataset.tab === 'posts');
-                        if (button.dataset.tab === 'posts') loadPosts();
+                        if (button.dataset.tab === 'posts') loadPosts(0);
                         if (button.dataset.tab === 'categories') loadCategories();
                         if (button.dataset.tab === 'comments') loadComments(0);
                         if (button.dataset.tab === 'logs') { loadAccessLogs(0); loadLoginLogs(0); }
@@ -494,7 +500,7 @@ public class AdminConsoleController {
                         } else {
                           resetCreatePostForm(false);
                         }
-                        await loadPosts();
+                        await loadPosts(0);
                       } else {
                         document.getElementById(statusId).textContent = await errorMessage(response, '게시글 저장에 실패했습니다.');
                       }
@@ -520,9 +526,16 @@ public class AdminConsoleController {
                       }
                     });
 
-                    async function loadPosts() {
-                      const response = await fetch('/api/posts?size=100');
+                    async function loadPosts(page = 0) {
+                      if (page < 0) return;
+                      const response = await fetch('/api/posts?page=' + page + '&size=20');
+                      if (!response.ok) {
+                        document.getElementById('posts').textContent = await errorMessage(response, '게시글 목록을 불러오지 못했습니다.');
+                        return;
+                      }
                       const data = await response.json();
+                      postPage = data.page;
+                      document.getElementById('postPageLabel').textContent = `${data.page + 1} / ${Math.max(data.totalPages, 1)}`;
                       document.getElementById('posts').innerHTML = data.content.map(post => `
                         <div class="row">
                           <div>
@@ -557,7 +570,7 @@ public class AdminConsoleController {
                       if (!confirm('삭제할까요?')) return;
                       const response = await fetch('/api/admin/posts/' + id, { method: 'DELETE' });
                       if (!response.ok) alert(await errorMessage(response, '게시글 삭제에 실패했습니다.'));
-                      loadPosts();
+                      loadPosts(postPage);
                     }
 
                     async function loadCategories() {
@@ -858,7 +871,7 @@ public class AdminConsoleController {
                       });
                       document.querySelectorAll('#tab-posts .subtab').forEach(item => item.classList.remove('active'));
                       document.getElementById('post-subtab-' + name).classList.add('active');
-                      if (name === 'manage') loadPosts();
+                      if (name === 'manage') loadPosts(0);
                     }
 
                     function resetCategoryForm() {
@@ -957,7 +970,7 @@ public class AdminConsoleController {
                     initializeComposer('create');
                     initializeComposer('edit');
                     loadCategories();
-                    loadPosts();
+                    loadPosts(0);
                   </script>
                 </body>
                 </html>
