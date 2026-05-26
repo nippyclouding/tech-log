@@ -130,7 +130,7 @@ certbot/certbot:latest
 4. 각 이미지를 GHCR에 두 개 태그로 push한다.
    - 커밋 SHA 태그: 특정 배포 버전을 정확히 식별한다.
    - `latest` 태그: 최초 EC2 배포 시 사용한다.
-5. `production` Environment 변수 `DEPLOY_ENABLED=true`가 설정된 이후에는 GitHub Actions가 SSH로 EC2에 접속한다.
+5. Repository Actions variable `DEPLOY_ENABLED=true`가 설정된 이후에는 GitHub Actions가 `production` Environment의 secrets를 사용해 SSH로 EC2에 접속한다.
 6. EC2의 [`deploy/deploy.sh`](../../deploy/deploy.sh)가 해당 커밋 SHA의 이미지를 pull하고 컨테이너를 갱신한다.
 
 GHCR에는 이미 다음 패키지가 publish된 상태임을 확인했다.
@@ -159,7 +159,7 @@ GitHub Actions 검증 및 이미지 publish
 -> docker compose up -d
 ```
 
-초기 HTTPS 발급이 완료되기 전에는 GitHub `production` Environment의 `DEPLOY_ENABLED` 값을 설정하지 않는다. HTTPS 발급과 EC2 준비가 끝난 후 `DEPLOY_ENABLED=true`로 활성화한다.
+초기 HTTPS 발급이 완료되기 전에는 GitHub Repository Actions variable `DEPLOY_ENABLED` 값을 설정하지 않는다. HTTPS 발급과 EC2 준비가 끝난 후 `DEPLOY_ENABLED=true`로 활성화한다.
 
 ## 5. 현재까지 진행한 작업
 
@@ -192,7 +192,7 @@ GitHub Actions 검증 및 이미지 publish
 | 1 | Nginx 템플릿 변환 수정이 포함된 `docker-compose.yml`을 GitHub에 push하여 이후 재배포에도 반영 |
 | 2 | 댓글 GitHub 로그인을 사용할 경우 GitHub OAuth callback 및 credentials 동작 확인 |
 | 3 | 이메일 알림을 사용할 경우 Gmail SMTP 앱 비밀번호 등 메일 값을 준비하고 `MAIL_ENABLED=true`로 전환 |
-| 4 | GitHub Actions production secrets 및 `DEPLOY_ENABLED=true` 설정 |
+| 4 | GitHub Actions `production` secrets 및 Repository variable `DEPLOY_ENABLED=true` 설정 |
 
 ## 6. 실제 실행한 EC2 명령과 의미
 
@@ -525,7 +525,7 @@ git commit -m "Fix nginx certificate setup and update deployment notes"
 git push origin main
 ```
 
-이 push는 GitHub Actions에서 수정된 Docker 이미지를 publish한다. EC2 자동 배포를 바로 사용할 경우에는 아래 secrets와 `DEPLOY_ENABLED=true` 설정을 먼저 완료한 다음 push한다. 자동 배포 설정을 아직 완료하지 않을 경우에는 push 후 EC2에서 새 Compose 코드를 반영하고 컨테이너를 재생성한다.
+이 push는 GitHub Actions에서 수정된 Docker 이미지를 publish한다. EC2 자동 배포를 바로 사용할 경우에는 아래 environment secrets와 Repository Actions variable `DEPLOY_ENABLED=true` 설정을 먼저 완료한 다음 push한다. 자동 배포 설정을 아직 완료하지 않을 경우에는 push 후 EC2에서 새 Compose 코드를 반영하고 컨테이너를 재생성한다.
 
 ```bash
 cd /home/ubuntu/tech-log
@@ -548,7 +548,11 @@ curl -I https://techlog.site
 | `EC2_SSH_KNOWN_HOSTS` | 검증한 EC2 SSH host key 라인 |
 | `EC2_DEPLOY_PATH` | `/home/ubuntu/tech-log` |
 
-### 8.3 Environment variable
+### 8.3 Repository Actions variable
+
+`DEPLOY_ENABLED`는 `production` Environment variable로 등록하면 안 된다. Workflow의 deploy job은 `environment: production`의 runner가 시작되기 전에 `if: vars.DEPLOY_ENABLED == 'true'` 조건을 평가하므로, Environment variable은 그 시점에 보이지 않아 job이 `skipped` 처리된다.
+
+GitHub Repository에서 `Settings` > `Secrets and variables` > `Actions` > `Variables`에 아래 값을 등록한다.
 
 | Variable | 값 |
 | --- | --- |

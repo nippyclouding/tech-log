@@ -38,7 +38,7 @@ Set `DOMAIN`, `CERTBOT_EMAIL`, `FRONTEND_ORIGIN=https://<DOMAIN>`, database pass
 
 The initialization script starts Nginx with a temporary certificate so the HTTP ACME challenge can be served, obtains the real certificate, reloads Nginx, and starts automatic renewal.
 
-For the first deployment, the `latest` application images must already exist in GHCR. Push to `main` once to let the workflow publish them. Keep the GitHub `production` environment variable `DEPLOY_ENABLED` unset until EC2 and the initial certificate are prepared; the deploy job will be skipped during this bootstrap push.
+For the first deployment, the `latest` application images must already exist in GHCR. Push to `main` once to let the workflow publish them. Keep the repository Actions variable `DEPLOY_ENABLED` unset until EC2 and the initial certificate are prepared; the deploy job will be skipped during this bootstrap push.
 
 ## Subsequent Updates
 
@@ -72,7 +72,7 @@ Before enabling the workflow:
 | `EC2_SSH_KNOWN_HOSTS` | Verified `known_hosts` line for EC2 |
 | `EC2_DEPLOY_PATH` | Absolute server repository path, such as `/home/ubuntu/tech-log` |
 
-7. After initial HTTPS setup succeeds on EC2, add an environment variable, not a secret, under the `production` Environment:
+7. After initial HTTPS setup succeeds on EC2, add a repository Actions variable, not a secret, under `Settings` > `Secrets and variables` > `Actions` > `Variables`:
 
 | Variable | Value |
 | --- | --- |
@@ -84,7 +84,7 @@ Generate the `known_hosts` content from a trusted machine and confirm its finger
 ssh-keyscan -H your-domain.example.com
 ```
 
-After `DEPLOY_ENABLED=true` is configured, `main` deployments run automatically after a push. You can also run `CI and Deploy` from the GitHub Actions tab using `Run workflow` on the `main` branch.
+`DEPLOY_ENABLED` must not be an environment-level variable: the deploy job checks it before the `production` environment is attached to a runner. After the repository variable is configured, `main` deployments run automatically after a push. You can also run `CI and Deploy` from the GitHub Actions tab using `Run workflow` on the `main` branch.
 
 The workflow never sends `.env.prod`, certificates, database data, or uploaded images through GitHub Actions. Those values remain on EC2.
 

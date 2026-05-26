@@ -90,6 +90,7 @@ jobs:
   deploy:
     name: Deploy to EC2
     needs: publish
+    # This gate must be a repository/org variable; environment variables are loaded after job scheduling.
     if: vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment: production
