@@ -74,3 +74,9 @@ firebase-adminsdk*.json
 
 # Uploaded local images
 /image/
+
+# Let's Encrypt account data and issued private keys
+/data/certbot/
+
+# Server-side deployment lock directory
+/.deploy.lock/
