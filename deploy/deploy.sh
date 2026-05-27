@@ -60,6 +60,9 @@ docker compose --env-file "$ENV_FILE" up -d --wait postgres
 docker compose --env-file "$ENV_FILE" exec -T postgres /bin/sh -c \
     'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
     < ./deploy/migrations/V20260527__access_log_error_details.sql
+docker compose --env-file "$ENV_FILE" exec -T postgres /bin/sh -c \
+    'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+    < ./deploy/migrations/V20260527__admins.sql
 docker compose --env-file "$ENV_FILE" up -d --remove-orphans
 docker compose --env-file "$ENV_FILE" ps
 

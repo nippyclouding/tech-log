@@ -1,5 +1,6 @@
 package com.nippyclouding.tech_log_back.auth.security;
 
+import com.nippyclouding.tech_log_back.admin.service.AdminAccountService;
 import com.nippyclouding.tech_log_back.log.login.service.LoginLogService;
 import com.nippyclouding.tech_log_back.global.exception.ErrorCode;
 import com.nippyclouding.tech_log_back.global.exception.ErrorResponse;
@@ -11,22 +12,17 @@ import java.time.LocalDateTime;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserService;
 import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
 import org.springframework.security.oauth2.core.user.OAuth2User;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import lombok.RequiredArgsConstructor;
 
@@ -38,6 +34,7 @@ public class SecurityConfig {
 
     private final ObjectMapper objectMapper;
     private final LoginLogService loginLogService;
+    private final AdminAccountService adminAccountService;
 
     @Bean
     public SecurityFilterChain securityFilterChain(
@@ -48,23 +45,24 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/admin-console", "/admin-console/login").permitAll()
+                        .requestMatchers("/admin-console", "/api/admin/session/login", "/api/admin/session/logout").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/posts/*/comments").authenticated()
                         .anyRequest().permitAll()
                 )
                 .formLogin(form -> form
-                        .loginPage("/admin-console")
-                        .loginProcessingUrl("/admin-console/login")
+                        .loginProcessingUrl("/api/admin/session/login")
                         .usernameParameter("adminId")
                         .passwordParameter("adminPassword")
                         .successHandler((request, response, authentication) -> {
+                            adminAccountService.recordSuccessfulLogin(authentication.getName());
                             recordLoginSafely("admin-console-success", authentication.getName(), request);
-                            response.sendRedirect("/admin-console");
+                            response.setStatus(HttpStatus.NO_CONTENT.value());
                         })
                         .failureHandler((request, response, exception) -> {
+                            adminAccountService.recordFailedLogin(request.getParameter("adminId"));
                             recordLoginSafely("admin-console-failure", request.getParameter("adminId"), request);
-                            response.sendRedirect("/admin-console?error");
+                            writeError(response, ErrorCode.UNAUTHORIZED, "ID 또는 PW가 올바르지 않습니다.", request.getRequestURI());
                         })
                         .permitAll()
                 )
@@ -85,8 +83,9 @@ public class SecurityConfig {
                         })
                 )
                 .logout(logout -> logout
-                        .logoutUrl("/admin-console/logout")
-                        .logoutSuccessUrl("/admin-console?logout")
+                        .logoutUrl("/api/admin/session/logout")
+                        .logoutSuccessHandler((request, response, authentication) ->
+                                response.setStatus(HttpStatus.NO_CONTENT.value()))
                 )
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint((request, response, authException) ->
@@ -95,23 +94,6 @@ public class SecurityConfig {
                                 writeError(response, ErrorCode.FORBIDDEN, accessDeniedException.getMessage(), request.getRequestURI()))
                 );
         return http.build();
-    }
-
-    @Bean
-    public UserDetailsService adminConsoleUserDetailsService(
-            @Value("${app.admin-console.username}") String username,
-            @Value("${app.admin-console.password}") String password,
-            PasswordEncoder passwordEncoder
-    ) {
-        return new InMemoryUserDetailsManager(User.withUsername(username)
-                .password(passwordEncoder.encode(password))
-                .roles("ADMIN")
-                .build());
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
     }
 
     @Bean

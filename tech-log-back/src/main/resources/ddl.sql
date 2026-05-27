@@ -104,6 +104,26 @@ CREATE TABLE "LOGIN_LOGS" (
                                CONSTRAINT "PK_LOGIN_LOGS" PRIMARY KEY ("login_log_id")
 );
 
+CREATE TABLE "ADMINS" (
+                          "admin_id" BIGSERIAL,
+                          "username" VARCHAR(100) NOT NULL,
+                          "password_hash" VARCHAR(100) NOT NULL,
+                          "display_name" VARCHAR(100) NOT NULL,
+                          "role" VARCHAR(30) DEFAULT 'ADMIN' NOT NULL,
+                          "is_active" BOOLEAN DEFAULT TRUE NOT NULL,
+                          "failed_login_attempts" INT DEFAULT 0 NOT NULL,
+                          "locked_until" TIMESTAMP,
+                          "last_login_at" TIMESTAMP,
+                          "password_changed_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                          "created_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                          "updated_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+
+                          CONSTRAINT "PK_ADMINS" PRIMARY KEY ("admin_id"),
+                          CONSTRAINT "UK_ADMINS_USERNAME" UNIQUE ("username"),
+                          CONSTRAINT "CK_ADMINS_ROLE" CHECK ("role" IN ('ADMIN')),
+                          CONSTRAINT "CK_ADMINS_FAILED_LOGIN_ATTEMPTS" CHECK ("failed_login_attempts" >= 0)
+);
+
 CREATE TABLE "NEWSLETTER_SUBSCRIPTIONS" (
                                           "subscription_id" BIGSERIAL,
                                           "updated_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,

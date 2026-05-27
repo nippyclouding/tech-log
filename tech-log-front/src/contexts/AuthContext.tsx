@@ -28,7 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    await fetch(`${BACKEND_ORIGIN}/admin-console/logout`, {
+    await fetch(`${BACKEND_ORIGIN}/api/admin/session/logout`, {
       method: 'POST',
       credentials: 'include',
     });

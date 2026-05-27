@@ -378,21 +378,21 @@ Content-Type: application/json
 ### 7.1 관리자 콘솔 페이지
 
 ```http
-GET /admin-console
+GET /admin
 ```
 
 | 항목 | 내용 |
 | --- | --- |
 | 인증 | Public |
-| 동작 | 미로그인 상태에는 로그인 HTML, 인증 세션에는 관리 콘솔 HTML 반환 |
-| 응답 형식 | `text/html` |
+| 동작 | React 관리자 화면이 현재 세션을 확인하여 로그인 폼 또는 관리 콘솔을 렌더링 |
+| 호환 경로 | `GET /admin-console`은 프론트엔드 `/admin`으로 Redirect |
 
 관리 기능 API인 `/api/admin/**`의 실제 호출은 별도로 `ROLE_ADMIN` 권한을 검사한다.
 
 ### 7.2 관리자 로그인
 
 ```http
-POST /admin-console/login
+POST /api/admin/session/login
 Content-Type: application/x-www-form-urlencoded
 ```
 
@@ -403,19 +403,21 @@ Content-Type: application/x-www-form-urlencoded
 
 | 결과 | 동작 |
 | --- | --- |
-| 성공 | `/admin-console`로 Redirect |
-| 실패 | `/admin-console?error`로 Redirect |
+| 성공 | `204 No Content`, React 화면이 세션 상태를 다시 조회 |
+| 실패 | `401 AUTH_401` |
+
+관리자 인증 데이터는 `ADMINS` 테이블에 BCrypt 해시로 저장된다. 최초 계정은 테이블이 비어 있을 때 운영 환경 변수로 한 번 생성되며, 로그인 실패가 5회 누적되면 15분 동안 잠긴다.
 
 ### 7.3 관리자 로그아웃
 
 ```http
-POST /admin-console/logout
+POST /api/admin/session/logout
 ```
 
 | 항목 | 내용 |
 | --- | --- |
 | 인증 | Public |
-| 성공 동작 | 세션을 로그아웃 처리하고 `/admin-console?logout`로 Redirect |
+| 성공 동작 | 세션을 로그아웃 처리하고 `204 No Content` 반환 |
 
 ## 8. 관리자 게시글 API
 
@@ -734,9 +736,10 @@ GET /image/{storedFileName}
 | `GET` | `/api/auth/me` | Public | 현재 사용자 확인 |
 | `GET` | `/oauth2/authorization/github` | Public | GitHub 로그인 시작 |
 | `POST` | `/api/posts/{postId}/comments` | GitHub User | 댓글 작성 |
-| `GET` | `/admin-console` | Public/Admin | 관리자 콘솔 페이지 |
-| `POST` | `/admin-console/login` | Public | 관리자 로그인 |
-| `POST` | `/admin-console/logout` | Public | 세션 로그아웃 |
+| `GET` | `/admin` | Public/Admin | React 관리자 콘솔 페이지 |
+| `GET` | `/admin-console` | Public | `/admin` 호환 Redirect |
+| `POST` | `/api/admin/session/login` | Public | 관리자 로그인 |
+| `POST` | `/api/admin/session/logout` | Public | 세션 로그아웃 |
 | `POST` | `/api/admin/posts` | Admin | 게시글 생성 |
 | `PUT` | `/api/admin/posts/{id}` | Admin | 게시글 수정 |
 | `DELETE` | `/api/admin/posts/{id}` | Admin | 게시글 삭제 |
