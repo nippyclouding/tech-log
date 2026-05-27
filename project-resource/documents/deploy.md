@@ -690,6 +690,28 @@ AUDIT_LOG_CLEANUP_CRON=0 15 3 * * *
 
 `ACCESS_LOGS`에는 서버 오류 발생 시 request ID, 오류 타입, 오류 메시지, 제한된 stack trace가 포함될 수 있다. `LOGIN_LOGS`에는 로그인 결과, login ID, IP가 포함된다. 게시글, 댓글, 이메일 구독자, 업로드 이미지, PostgreSQL volume은 이 스케줄러로 삭제되지 않는다. 상세 운영 기준은 [`운영가이드.md`](./운영가이드.md)를 따른다.
 
+### 9.5 Nginx IP 요청 제한
+
+`tech-log-front/nginx.conf`에는 IP 단위 rate limit이 적용되어 있다.
+
+| 대상 | 제한 |
+| --- | --- |
+| HTTP redirect, 정적 페이지 및 `/image/` | 초당 20건, burst 40 |
+| `/api/` | 초당 10건, burst 20 |
+| 로그인, 메일 구독/취소 요청, 댓글 작성 | 분당 5건, burst 2 |
+
+제한된 요청은 `429 Too Many Requests`를 반환한다. Certbot이 사용하는 `/.well-known/acme-challenge/` 경로는 최초 발급과 자동 갱신을 방해하지 않도록 제한에서 제외한다.
+
+Nginx 이미지가 새 설정으로 배포된 뒤 확인한다.
+
+```bash
+cd /home/ubuntu/tech-log
+docker exec tech-log-nginx nginx -t
+docker exec tech-log-nginx nginx -T 2>&1 | grep -E 'limit_req|sensitive_request_ip'
+```
+
+이 제한은 특정 IP의 과도한 반복 호출을 줄이는 애플리케이션 전단 방어이며, 분산 공격이나 AWS 과금을 완전히 차단하지는 않는다. 비용 위험을 더 낮추려면 CloudFront/AWS WAF 및 AWS Budgets 알림을 별도로 구성한다.
+
 ## 10. 관련 프로젝트 파일
 
 | 파일 | 역할 |
