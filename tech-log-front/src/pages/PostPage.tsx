@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import ReactMarkdown from "react-markdown";
 import { format } from "date-fns";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { motion, useScroll, useSpring } from "motion/react";
 import { Post } from "../types/blog";
 import { CommentSection } from "../components/blog/CommentSection";
+import { FormattedMarkdown } from "../components/blog/FormattedMarkdown";
 import { fetchPost, fetchPosts } from "../lib/api";
 
 export function PostPage() {
@@ -119,7 +119,7 @@ export function PostPage() {
         <div className="max-w-3xl">
           <div className="prose prose-lg prose-slate max-w-none prose-headings:text-slate-900 prose-p:text-slate-700 prose-a:text-blue-600 prose-img:rounded-3xl prose-pre:bg-slate-900 prose-pre:shadow-2xl prose-pre:rounded-2xl">
             <div className="markdown-body">
-              <ReactMarkdown>{post.content}</ReactMarkdown>
+              <FormattedMarkdown content={post.content} />
             </div>
           </div>
 

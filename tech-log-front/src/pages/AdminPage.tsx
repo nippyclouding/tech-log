@@ -1,6 +1,6 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
 import { Category, CurrentUser, fetchCategories, fetchCurrentUser, fetchPost, fetchPosts, PageResponse } from "../lib/api";
+import { FormattedMarkdown } from "../components/blog/FormattedMarkdown";
 import {
   AccessLog,
   AdminComment,
@@ -230,11 +230,17 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
     const replacements: Record<string, string> = {
       heading: `## ${selected || "소제목"}`,
       bold: `**${selected || "강조할 내용"}**`,
+      italic: `*${selected || "기울임 텍스트"}*`,
+      underline: `[${selected || "밑줄 텍스트"}](underline:)`,
       quote: (selected || "인용문").split("\n").map(line => `> ${line}`).join("\n"),
       list: (selected || "목록 항목").split("\n").map(line => `- ${line}`).join("\n"),
       code: `\n\n\`\`\`\n${selected || "코드를 입력하세요"}\n\`\`\`\n\n`,
       link: `[${selected || "링크 텍스트"}](https://)`,
       divider: "\n\n---\n\n",
+      alignLeft: `\n\n[align=left]\n${selected || "왼쪽 정렬할 문단"}\n[/align]\n\n`,
+      alignCenter: `\n\n[align=center]\n${selected || "가운데 정렬할 문단"}\n[/align]\n\n`,
+      alignRight: `\n\n[align=right]\n${selected || "오른쪽 정렬할 문단"}\n[/align]\n\n`,
+      gap: selected ? `${selected}\n\n` : "\n\n",
     };
     const next = content.slice(0, start) + replacements[format] + content.slice(end);
     updateContent(next);
@@ -303,7 +309,7 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
       <div className="grid md:grid-cols-[1fr_300px]">
         <div className="min-w-0 border-r border-slate-100">
           <div className="flex flex-wrap gap-1 border-b border-slate-200 p-3">
-            {[["heading", "H2"], ["bold", "Bold"], ["quote", "Quote"], ["list", "List"], ["code", "Code"], ["link", "Link"], ["divider", "HR"]].map(([key, label]) => (
+            {[["heading", "H2"], ["bold", "Bold"], ["italic", "Italic"], ["underline", "Underline"], ["quote", "Quote"], ["list", "List"], ["code", "Code"], ["link", "Link"], ["divider", "HR"], ["alignLeft", "Left"], ["alignCenter", "Center"], ["alignRight", "Right"], ["gap", "Gap"]].map(([key, label]) => (
               <button type="button" key={key} onClick={() => insert(key)} className={toolButtonClass}>{label}</button>
             ))}
             <button type="button" onClick={insertImages} className={toolButtonClass}>Image</button>
@@ -316,7 +322,7 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
             <textarea ref={textarea} value={content} onChange={event => updateContent(event.target.value)} required placeholder="본문을 마크다운으로 입력하세요." className="min-h-[520px] w-full resize-y border-0 p-8 text-base leading-8 outline-none" />
           ) : (
             <article className="markdown-body min-h-[520px] p-8">
-              {content ? <ReactMarkdown urlTransform={url => url} components={{ img: PreviewImage }}>{content}</ReactMarkdown> : <p>작성한 글의 미리보기가 여기에 표시됩니다.</p>}
+              {content ? <FormattedMarkdown content={content} allowPendingImages imageComponent={PreviewImage} /> : <p>작성한 글의 미리보기가 여기에 표시됩니다.</p>}
             </article>
           )}
         </div>

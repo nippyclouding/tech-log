@@ -38,6 +38,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -124,6 +125,24 @@ class BoardServiceTest {
 
         verify(boardRepository).findAll(any(Pageable.class));
         verify(boardRepository, never()).findByKeyword(any(), any());
+    }
+
+    @Test
+    @DisplayName("목록 요약은 에디터 서식 표식 대신 본문 텍스트를 반환한다")
+    void search_removesEditorFormattingDirectivesFromExcerpt() {
+        Board board = board("서식 글", """
+                [align=center]
+                [가운데 문장](underline:)
+                [/align]
+
+                *기울임 문장*과 **굵은 문장**
+                """);
+        given(boardRepository.findAll(any(Pageable.class))).willReturn(new PageImpl<>(List.of(board)));
+
+        var response = boardService.search(null, null, 0, 5);
+
+        assertThat(response.content().get(0).excerpt())
+                .isEqualTo("가운데 문장 기울임 문장과 굵은 문장");
     }
 
     @Test
