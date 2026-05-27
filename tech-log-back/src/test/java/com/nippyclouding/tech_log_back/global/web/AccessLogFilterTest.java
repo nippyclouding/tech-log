@@ -61,6 +61,22 @@ class AccessLogFilterTest {
     }
 
     @Test
+    void skipsMissingPublicResourceRequest() throws Exception {
+        filter("GET", "/api/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php", 404);
+
+        verify(accessLogService, never()).record(
+                "127.0.0.1",
+                "/api/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php",
+                "GET",
+                404,
+                "unassigned",
+                null,
+                null,
+                null
+        );
+    }
+
+    @Test
     void skipsNormalLogLookupAndBrowserAuxiliaryRequests() throws Exception {
         filter("GET", "/api/admin/access-logs", 200);
         filter("OPTIONS", "/api/admin/posts", 500);

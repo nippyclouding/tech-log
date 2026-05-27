@@ -8,6 +8,7 @@ public enum ErrorCode {
     FORBIDDEN(HttpStatus.FORBIDDEN, "AUTH_403", "Access denied."),
     BOARD_NOT_FOUND(HttpStatus.NOT_FOUND, "BOARD_404", "Post was not found."),
     CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "CATEGORY_404", "존재하지 않는 카테고리입니다."),
+    RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "COMMON_404", "Resource was not found."),
     CATEGORY_DUPLICATED(HttpStatus.CONFLICT, "CATEGORY_409", "이미 존재하는 카테고리입니다."),
     CATEGORY_IN_USE(HttpStatus.CONFLICT, "CATEGORY_409_IN_USE", "게시글에서 사용 중인 카테고리는 삭제할 수 없습니다."),
     COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "COMMENT_404", "Comment was not found."),
