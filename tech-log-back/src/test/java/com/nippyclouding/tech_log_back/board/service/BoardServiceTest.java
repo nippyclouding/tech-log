@@ -306,6 +306,26 @@ class BoardServiceTest {
     }
 
     @Test
+    @DisplayName("본문에 이미지 위치만 남고 파일이 없으면 깨진 게시글 저장을 거부한다")
+    void createWithImages_rejectsPlaceholderWithoutSelectedFile() {
+        given(localImageStorageService.store(any())).willReturn(List.of());
+        PostCreateRequest request = new PostCreateRequest(
+                "이미지 글",
+                null,
+                "본문\n\n![이미지 1](pending-image:0)",
+                "Spring",
+                null,
+                List.of(),
+                List.of("Spring")
+        );
+
+        assertThatThrownBy(() -> boardService.create(request, List.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("본문에 배치한 이미지 파일을 다시 선택하세요.");
+        verify(boardRepository, never()).save(any(Board.class));
+    }
+
+    @Test
     @DisplayName("이미지 수정 시 본문에서 더 이상 참조하지 않는 이전 파일만 삭제한다")
     void updateWithImages_deletesOnlyUnreferencedPreviousFile() {
         // given
@@ -339,6 +359,70 @@ class BoardServiceTest {
         } finally {
             TransactionSynchronizationManager.clearSynchronization();
         }
+    }
+
+    @Test
+    @DisplayName("새 이미지 없는 수정도 제거한 이미지를 삭제하고 기존 대표 이미지를 유지한다")
+    void updateWithImages_withoutNewFiles_reconcilesExistingImages() {
+        Board board = board("기존 글", "기존 본문");
+        setId(board, 1L);
+        board.getImages().add(uploadedImage(board, "keep.png", true));
+        board.getImages().add(uploadedImage(board, "remove.png", false));
+        given(boardRepository.findById(1L)).willReturn(Optional.of(board));
+        given(categoryRepository.findByName("Spring")).willReturn(Optional.of(category("Spring")));
+        given(localImageStorageService.store(any())).willReturn(List.of());
+        PostUpdateRequest request = new PostUpdateRequest(
+                "수정 글",
+                null,
+                "유지할 이미지 ![](/image/keep.png)",
+                "Spring",
+                null,
+                List.of(),
+                List.of("Spring")
+        );
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            PostDetailResponse response = boardService.update(1L, request, List.of());
+
+            assertThat(response.coverImage()).isEqualTo("/image/keep.png");
+            assertThat(board.getImages()).singleElement()
+                    .satisfies(image -> {
+                        assertThat(image.getStoredName()).isEqualTo("keep.png");
+                        assertThat(image.isThumbnail()).isTrue();
+                    });
+            TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+            verify(localImageStorageService).deleteStoredFiles(List.of("remove.png"));
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
+    @DisplayName("본문만 수정하고 이미지 참조가 그대로이면 이미지 레코드를 재생성하지 않는다")
+    void updateWithImages_withoutImageChanges_keepsImageRecords() {
+        Board board = board("기존 글", "기존 이미지 ![](/image/keep.png)");
+        setId(board, 1L);
+        board.getImages().add(uploadedImage(board, "keep.png", true));
+        given(boardRepository.findById(1L)).willReturn(Optional.of(board));
+        given(categoryRepository.findByName("Spring")).willReturn(Optional.of(category("Spring")));
+        given(localImageStorageService.store(any())).willReturn(List.of());
+        PostUpdateRequest request = new PostUpdateRequest(
+                "본문만 수정",
+                null,
+                "변경한 본문 ![](/image/keep.png)",
+                "Spring",
+                null,
+                List.of(),
+                List.of("Spring")
+        );
+
+        PostDetailResponse response = boardService.update(1L, request, List.of());
+
+        assertThat(response.coverImage()).isEqualTo("/image/keep.png");
+        verify(imageRepository, never()).deleteByBoard(board);
+        verify(imageRepository, never()).save(any(Image.class));
+        verify(localImageStorageService, never()).deleteStoredFiles(any());
     }
 
     @Test

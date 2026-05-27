@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { Category, CurrentUser, fetchCategories, fetchCurrentUser, fetchPost, fetchPosts, PageResponse } from "../lib/api";
 import { FormattedMarkdown } from "../components/blog/FormattedMarkdown";
 import {
@@ -170,6 +170,7 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
   const [status, setStatus] = useState("");
   const [draftState, setDraftState] = useState(draft ? "임시 저장 대기" : "");
   const textarea = useRef<HTMLTextAreaElement>(null);
+  const imageInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!draft || post) return;
@@ -187,6 +188,7 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
   }, [draft, post]);
 
   useEffect(() => {
+    if (!categories.length) return;
     setSelectedCategories(current => current.filter(name => categories.some(category => category.name === name)));
   }, [categories]);
 
@@ -253,8 +255,30 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
       setStatus("먼저 이미지를 선택하세요.");
       return;
     }
-    const placeholder = files.map((_, index) => `\n\n![이미지 ${index + 1}](pending-image:${index})\n\n`).join("");
-    updateContent(content + placeholder);
+    const notInserted = files
+      .map((_, index) => index)
+      .filter(index => !new RegExp(`pending-image:${index}(?!\\d)`).test(content));
+    if (!notInserted.length) {
+      setStatus("선택한 이미지는 이미 본문에 삽입되어 있습니다.");
+      return;
+    }
+    const placeholder = notInserted
+      .map(index => `\n\n![이미지 ${index + 1}](pending-image:${index})\n\n`)
+      .join("");
+    const element = textarea.current;
+    const position = element?.selectionStart ?? content.length;
+    updateContent(content.slice(0, position) + placeholder + content.slice(position));
+    setPreview(false);
+    setStatus(`${notInserted.length}개 이미지 위치를 본문에 삽입했습니다.`);
+    requestAnimationFrame(() => textarea.current?.focus());
+  };
+
+  const selectImages = (event: ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(event.target.files ?? []);
+    if (!selected.length) return;
+    setFiles(current => [...current, ...selected]);
+    setStatus(`${selected.length}개 파일을 추가했습니다. Image 버튼을 눌러 본문에 배치하세요.`);
+    event.target.value = "";
   };
 
   const reset = () => {
@@ -264,6 +288,7 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
     setFiles([]);
     setPreview(false);
     setStatus("");
+    if (imageInput.current) imageInput.current.value = "";
     if (draft) {
       localStorage.removeItem(draftKey);
       setDraftState("임시 저장 대기");
@@ -344,8 +369,13 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
           </div>
           <hr className="my-6 border-slate-200" />
           <h3 className="mb-3 font-bold">이미지</h3>
-          <input type="file" accept="image/*" multiple onChange={event => setFiles(Array.from(event.target.files ?? []))} className="w-full rounded-lg border border-dashed border-slate-300 bg-white p-3 text-xs" />
-          <p className="mt-2 text-xs leading-5 text-slate-500">파일을 고른 뒤 Image 버튼으로 본문 위치를 표시하세요.</p>
+          <input ref={imageInput} type="file" accept="image/*" multiple onChange={selectImages} className="w-full rounded-lg border border-dashed border-slate-300 bg-white p-3 text-xs" />
+          <p className="mt-2 text-xs leading-5 text-slate-500">파일을 추가한 뒤 Image 버튼으로 커서 위치에 배치하세요. 여러 번 선택해도 앞선 파일은 유지됩니다.</p>
+          {files.length > 0 && (
+            <ul className="mt-3 space-y-1 text-xs text-slate-600">
+              {files.map((file, index) => <li key={`${file.name}-${index}`}>{index + 1}. {file.name}</li>)}
+            </ul>
+          )}
           <hr className="my-6 border-slate-200" />
           <p className="text-xs text-slate-500">본문 {content.length}자 · 단어 {words}개</p>
           {status && <p className="mt-4 text-sm font-semibold text-blue-700">{status}</p>}
