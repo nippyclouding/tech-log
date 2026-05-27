@@ -22,7 +22,10 @@ export function HomePage() {
   const [newsletterSubmitting, setNewsletterSubmitting] = useState(false);
   const [searchParams] = useSearchParams();
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const latestRequestRef = useRef(0);
   const searchQuery = searchParams.get("q") || "";
+  const categoryQueryRef = useRef(searchQuery);
+  const activeCategory = categoryQueryRef.current === searchQuery ? selectedCategory : null;
 
   useEffect(() => {
     fetchCategories()
@@ -41,7 +44,13 @@ export function HomePage() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    categoryQueryRef.current = searchQuery;
+    setSelectedCategory(null);
+  }, [searchQuery]);
+
   const loadPosts = useCallback(async (nextPage: number, replace = false) => {
+    const requestId = ++latestRequestRef.current;
     if (replace) {
       setLoading(true);
     } else {
@@ -53,19 +62,23 @@ export function HomePage() {
       const data = await fetchPosts({
         page: nextPage,
         size: POSTS_PER_PAGE,
-        category: selectedCategory,
+        category: activeCategory,
         q: searchQuery,
       });
+      if (requestId !== latestRequestRef.current) return;
       setPosts(prev => replace ? data.content : [...prev, ...data.content]);
       setPage(data.page);
       setLast(data.last);
     } catch (err) {
+      if (requestId !== latestRequestRef.current) return;
       setError("게시글을 불러오지 못했습니다.");
     } finally {
-      setLoading(false);
-      setLoadingMore(false);
+      if (requestId === latestRequestRef.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
-  }, [selectedCategory, searchQuery]);
+  }, [activeCategory, searchQuery]);
 
   useEffect(() => {
     setPosts([]);
@@ -144,7 +157,7 @@ export function HomePage() {
         <button
           onClick={() => setSelectedCategory(null)}
           className={`px-5 py-2 rounded-full text-sm font-bold transition-all border ${
-            selectedCategory === null
+            activeCategory === null
               ? "bg-slate-900 text-white border-slate-900 shadow-lg shadow-slate-200"
               : "bg-white text-slate-600 border-slate-100 hover:border-slate-300"
           }`}
@@ -156,7 +169,7 @@ export function HomePage() {
             key={cat.id}
             onClick={() => setSelectedCategory(cat.name)}
             className={`px-5 py-2 rounded-full text-sm font-bold transition-all border ${
-              selectedCategory === cat.name
+              activeCategory === cat.name
                 ? "bg-slate-900 text-white border-slate-900 shadow-lg shadow-slate-200"
                 : "bg-white text-slate-600 border-slate-100 hover:border-slate-300"
             }`}
@@ -191,8 +204,10 @@ export function HomePage() {
       ) : (
         <div className="py-24 text-center border-2 border-dashed border-slate-100 rounded-3xl">
           <FileText className="w-16 h-16 text-slate-200 mx-auto mb-4" />
-          <p className="text-slate-400 font-medium">아직 작성된 포스트가 없습니다.</p>
-          {selectedCategory !== null && (
+          <p className="text-slate-400 font-medium">
+            {searchQuery ? `"${searchQuery}" 검색 결과가 없습니다.` : "아직 작성된 포스트가 없습니다."}
+          </p>
+          {activeCategory !== null && (
             <button
               onClick={() => setSelectedCategory(null)}
               className="mt-4 text-blue-600 font-bold hover:underline"

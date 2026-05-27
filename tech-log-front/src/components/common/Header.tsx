@@ -1,4 +1,4 @@
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Search, Menu, Github, LogOut } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { motion, AnimatePresence } from "motion/react";
@@ -6,13 +6,11 @@ import { useState, useEffect } from "react";
 
 export function Header() {
   const { user, login, logout } = useAuth();
-  const location = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [showMenu, setShowMenu] = useState(false);
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
-
-  const isHomePage = location.pathname === "/";
 
   useEffect(() => {
     setSearchQuery(searchParams.get("q") || "");
@@ -20,6 +18,7 @@ export function Header() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    setShowMobileSearch(false);
     if (searchQuery.trim()) {
       navigate(`/?q=${encodeURIComponent(searchQuery.trim())}`);
     } else {
@@ -62,11 +61,15 @@ export function Header() {
         </div>
 
         <div className="flex items-center space-x-4">
-          {isHomePage && (
-            <button className="lg:hidden p-2 text-gray-500 hover:text-black transition-colors">
-              <Search className="h-5 w-5" />
-            </button>
-          )}
+          <button
+            type="button"
+            aria-label="검색 열기"
+            aria-expanded={showMobileSearch}
+            onClick={() => setShowMobileSearch(current => !current)}
+            className="lg:hidden p-2 text-gray-500 hover:text-black transition-colors"
+          >
+            <Search className="h-5 w-5" />
+          </button>
           
           {!user && (
             <button 
@@ -124,6 +127,23 @@ export function Header() {
           </button>
         </div>
       </div>
+      {showMobileSearch && (
+        <form onSubmit={handleSearch} className="border-t border-gray-100 px-4 py-3 lg:hidden">
+          <label htmlFor="mobile-post-search" className="sr-only">게시글 검색</label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              id="mobile-post-search"
+              autoFocus
+              type="search"
+              value={searchQuery}
+              onChange={event => setSearchQuery(event.target.value)}
+              placeholder="게시글 검색"
+              className="w-full rounded-xl bg-slate-100 py-2 pl-10 pr-4 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-blue-100"
+            />
+          </div>
+        </form>
+      )}
     </header>
   );
 }
