@@ -287,7 +287,16 @@ public class BoardService {
     }
 
     private String excerpt(String content) {
-        String normalized = content.replaceAll("#+", "").replaceAll("\\s+", " ").trim();
+        String normalized = content
+                .replaceAll("(?m)^\\[align=(left|center|right)]\\s*$", "")
+                .replaceAll("(?m)^\\[/align]\\s*$", "")
+                .replaceAll("!\\[[^\\]]*]\\([^)]+\\)", "")
+                .replaceAll("\\[([^\\]]+)]\\([^)]+\\)", "$1")
+                .replaceAll("\\*\\*([^*]+)\\*\\*", "$1")
+                .replaceAll("\\*([^*]+)\\*", "$1")
+                .replaceAll("#+", "")
+                .replaceAll("\\s+", " ")
+                .trim();
         return normalized.length() <= 120 ? normalized : normalized.substring(0, 120) + "...";
     }
 
