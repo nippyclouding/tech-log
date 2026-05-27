@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { format } from "date-fns";
-import { Send, MessageCircle, Github, Lock, Loader2 } from "lucide-react";
+import { Send, MessageCircle, Github, Lock, Loader2, Pencil, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "../../contexts/AuthContext";
-import { Comment, createComment, fetchComments } from "../../lib/api";
+import { Comment, createComment, deleteComment, fetchComments, updateComment } from "../../lib/api";
 
 export function CommentSection({ postId }: { postId: string | number }) {
   const { user, login } = useAuth();
@@ -11,6 +11,9 @@ export function CommentSection({ postId }: { postId: string | number }) {
   const [newContent, setNewContent] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingContent, setEditingContent] = useState("");
+  const [isMutating, setIsMutating] = useState(false);
   const [error, setError] = useState("");
 
   const loadComments = async () => {
@@ -42,6 +45,49 @@ export function CommentSection({ postId }: { postId: string | number }) {
       setError("댓글 작성에 실패했습니다. GitHub 로그인이 필요할 수 있습니다.");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const startEditing = (comment: Comment) => {
+    setEditingId(comment.id);
+    setEditingContent(comment.content);
+    setError("");
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingId === null || !editingContent.trim() || isMutating) return;
+
+    setIsMutating(true);
+    setError("");
+    try {
+      await updateComment(postId, editingId, editingContent);
+      setEditingId(null);
+      setEditingContent("");
+      await loadComments();
+    } catch (err) {
+      setError("댓글 수정에 실패했습니다.");
+    } finally {
+      setIsMutating(false);
+    }
+  };
+
+  const handleDelete = async (commentId: number) => {
+    if (isMutating || !window.confirm("댓글을 삭제할까요?")) return;
+
+    setIsMutating(true);
+    setError("");
+    try {
+      await deleteComment(postId, commentId);
+      if (editingId === commentId) {
+        setEditingId(null);
+        setEditingContent("");
+      }
+      await loadComments();
+    } catch (err) {
+      setError("댓글 삭제에 실패했습니다.");
+    } finally {
+      setIsMutating(false);
     }
   };
 
@@ -147,13 +193,67 @@ export function CommentSection({ postId }: { postId: string | number }) {
                       <Github className="w-3 h-3 ml-1.5 opacity-30" />
                     </a>
                   </div>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">
-                    {format(new Date(comment.date), "MMM d, yyyy HH:mm")}
-                  </span>
+                  <div className="flex items-center space-x-3">
+                    {comment.ownedByCurrentUser && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => startEditing(comment)}
+                          disabled={isMutating}
+                          className="inline-flex items-center text-xs font-bold text-slate-400 hover:text-blue-600 disabled:opacity-50"
+                        >
+                          <Pencil className="w-3 h-3 mr-1" />
+                          수정
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(comment.id)}
+                          disabled={isMutating}
+                          className="inline-flex items-center text-xs font-bold text-slate-400 hover:text-red-500 disabled:opacity-50"
+                        >
+                          <Trash2 className="w-3 h-3 mr-1" />
+                          삭제
+                        </button>
+                      </>
+                    )}
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">
+                      {format(new Date(comment.date), "MMM d, yyyy HH:mm")}
+                    </span>
+                  </div>
                 </div>
-                <p className="text-slate-700 leading-relaxed md:pl-13">
-                  {comment.content}
-                </p>
+                {editingId === comment.id ? (
+                  <form onSubmit={handleUpdate} className="md:pl-13">
+                    <textarea
+                      value={editingContent}
+                      onChange={e => setEditingContent(e.target.value)}
+                      required
+                      rows={3}
+                      maxLength={500}
+                      className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 outline-none transition-all font-medium text-sm resize-none"
+                    />
+                    <div className="mt-3 flex justify-end space-x-2">
+                      <button
+                        type="button"
+                        disabled={isMutating}
+                        onClick={() => setEditingId(null)}
+                        className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 disabled:opacity-50"
+                      >
+                        취소
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isMutating || !editingContent.trim()}
+                        className="px-4 py-2 rounded-xl bg-blue-600 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        저장
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <p className="text-slate-700 leading-relaxed md:pl-13 whitespace-pre-wrap">
+                    {comment.content}
+                  </p>
+                )}
               </motion.div>
             ))}
             {comments.length === 0 && (

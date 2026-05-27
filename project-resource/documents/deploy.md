@@ -698,7 +698,7 @@ AUDIT_LOG_CLEANUP_CRON=0 15 3 * * *
 | --- | --- |
 | HTTP redirect, 정적 페이지 및 `/image/` | 초당 20건, burst 40 |
 | `/api/` | 초당 10건, burst 20 |
-| 로그인, 메일 구독/취소 요청, 댓글 작성 | 분당 5건, burst 2 |
+| 로그인, 메일 구독/취소 요청, 댓글 작성/수정/삭제 | 분당 5건, burst 2 |
 
 제한된 요청은 `429 Too Many Requests`를 반환한다. Certbot이 사용하는 `/.well-known/acme-challenge/` 경로는 최초 발급과 자동 갱신을 방해하지 않도록 제한에서 제외한다.
 

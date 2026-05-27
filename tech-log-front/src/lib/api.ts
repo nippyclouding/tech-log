@@ -39,6 +39,7 @@ export interface Comment {
   authorGithubUrl: string;
   content: string;
   date: string;
+  ownedByCurrentUser: boolean;
 }
 
 export interface CurrentUser {
@@ -100,6 +101,19 @@ export function createComment(postId: string | number, content: string) {
   return request<Comment>(`/api/posts/${postId}/comments`, {
     method: "POST",
     body: JSON.stringify({ content }),
+  });
+}
+
+export function updateComment(postId: string | number, commentId: number, content: string) {
+  return request<Comment>(`/api/posts/${postId}/comments/${commentId}`, {
+    method: "PUT",
+    body: JSON.stringify({ content }),
+  });
+}
+
+export function deleteComment(postId: string | number, commentId: number) {
+  return request<void>(`/api/posts/${postId}/comments/${commentId}`, {
+    method: "DELETE",
   });
 }
 

@@ -10,6 +10,7 @@ import com.nippyclouding.tech_log_back.board.entity.Board;
 import com.nippyclouding.tech_log_back.board.repository.BoardRepository;
 import com.nippyclouding.tech_log_back.comment.dto.CommentCreateRequest;
 import com.nippyclouding.tech_log_back.comment.dto.CommentResponse;
+import com.nippyclouding.tech_log_back.comment.dto.CommentUpdateRequest;
 import com.nippyclouding.tech_log_back.comment.entity.Comment;
 import com.nippyclouding.tech_log_back.comment.repository.CommentRepository;
 import com.nippyclouding.tech_log_back.global.exception.BusinessException;
@@ -60,6 +61,7 @@ class CommentServiceTest {
         assertThat(response.authorName()).isEqualTo("octocat");
         assertThat(response.content()).isEqualTo("안녕하세요");
         assertThat(response.authorGithubUrl()).isEqualTo("https://github.com/octocat");
+        assertThat(response.ownedByCurrentUser()).isTrue();
     }
 
     @Test
@@ -102,6 +104,66 @@ class CommentServiceTest {
 
         // when & then
         assertThatThrownBy(() -> commentService.delete(5L))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.COMMENT_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("작성자는 자신의 댓글 내용을 수정할 수 있다")
+    void update_updatesOwnedComment() {
+        Board board = new Board("게시글", "게시글 본문입니다.");
+        ReflectionTestUtils.setField(board, "id", 1L);
+        Comment comment = new Comment(board, "이전 댓글", 100L, "octocat", "", "127.0.0.1");
+        ReflectionTestUtils.setField(comment, "id", 5L);
+        GithubUser githubUser = new GithubUser(100L, "octocat", "Mona", null, "");
+        given(commentRepository.findById(5L)).willReturn(Optional.of(comment));
+
+        CommentResponse response = commentService.update(1L, 5L, new CommentUpdateRequest(" 수정된 댓글 "), githubUser);
+
+        assertThat(response.content()).isEqualTo("수정된 댓글");
+        assertThat(response.ownedByCurrentUser()).isTrue();
+    }
+
+    @Test
+    @DisplayName("작성자는 자신의 댓글을 삭제할 수 있다")
+    void deleteOwn_marksOwnedCommentDeleted() {
+        Board board = new Board("게시글", "게시글 본문입니다.");
+        ReflectionTestUtils.setField(board, "id", 1L);
+        Comment comment = new Comment(board, "삭제될 댓글", 100L, "octocat", "", "127.0.0.1");
+        GithubUser githubUser = new GithubUser(100L, "octocat", "Mona", null, "");
+        given(commentRepository.findById(5L)).willReturn(Optional.of(comment));
+
+        commentService.deleteOwn(1L, 5L, githubUser);
+
+        assertThat(comment.isDeleted()).isTrue();
+    }
+
+    @Test
+    @DisplayName("다른 작성자의 댓글은 수정할 수 없다")
+    void update_throwsWhenNotOwner() {
+        Board board = new Board("게시글", "게시글 본문입니다.");
+        ReflectionTestUtils.setField(board, "id", 1L);
+        Comment comment = new Comment(board, "다른 사람 댓글", 200L, "other", "", "127.0.0.1");
+        GithubUser githubUser = new GithubUser(100L, "octocat", "Mona", null, "");
+        given(commentRepository.findById(5L)).willReturn(Optional.of(comment));
+
+        assertThatThrownBy(() -> commentService.update(1L, 5L, new CommentUpdateRequest("수정"), githubUser))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("다른 게시글에 속한 댓글은 본인 댓글이라도 삭제할 수 없다")
+    void deleteOwn_throwsWhenPostDoesNotMatch() {
+        Board board = new Board("게시글", "게시글 본문입니다.");
+        ReflectionTestUtils.setField(board, "id", 2L);
+        Comment comment = new Comment(board, "댓글", 100L, "octocat", "", "127.0.0.1");
+        GithubUser githubUser = new GithubUser(100L, "octocat", "Mona", null, "");
+        given(commentRepository.findById(5L)).willReturn(Optional.of(comment));
+
+        assertThatThrownBy(() -> commentService.deleteOwn(1L, 5L, githubUser))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.COMMENT_NOT_FOUND);

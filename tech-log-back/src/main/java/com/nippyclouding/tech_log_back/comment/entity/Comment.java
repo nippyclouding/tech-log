@@ -56,20 +56,29 @@ public class Comment {
 
     @Builder
     public Comment(Board board, String content, Long githubId, String githubName, String githubAvatarUrl, String accessIp) {
-        if (content == null || content.isBlank() || content.length() > 500) {
-            throw new IllegalArgumentException("comment content must be 1 to 500 characters");
-        }
         this.board = board;
-        this.content = content.trim();
+        this.content = normalizeContent(content);
         this.githubId = githubId;
         this.githubName = githubName;
         this.githubAvatarUrl = githubAvatarUrl;
         this.accessIp = accessIp;
     }
 
+    public void updateContent(String content) {
+        this.content = normalizeContent(content);
+        updatedAt = LocalDateTime.now();
+    }
+
     public void delete() {
         deleted = true;
         updatedAt = LocalDateTime.now();
+    }
+
+    private String normalizeContent(String content) {
+        if (content == null || content.isBlank() || content.length() > 500) {
+            throw new IllegalArgumentException("comment content must be 1 to 500 characters");
+        }
+        return content.trim();
     }
 
 }

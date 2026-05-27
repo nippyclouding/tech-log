@@ -86,6 +86,7 @@ public class AccessLogFilter extends OncePerRequestFilter {
         if (path.startsWith("/api/admin/") && MUTATION_METHODS.contains(method)) {
             return true;
         }
-        return "POST".equals(method) && path.matches("/api/posts/[^/]+/comments");
+        return ("POST".equals(method) && path.matches("/api/posts/[^/]+/comments"))
+                || (Set.of("PUT", "DELETE").contains(method) && path.matches("/api/posts/[^/]+/comments/[^/]+"));
     }
 }
