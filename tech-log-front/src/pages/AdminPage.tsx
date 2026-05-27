@@ -364,14 +364,18 @@ function PostManager({ categories }: { categories: Category[] }) {
   const [data, setData] = useState<PageResponse<Post>>(EMPTY_PAGE);
   const [editing, setEditing] = useState<Post | null>(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   const load = async (page = 0) => {
     if (page < 0) return;
+    setLoading(true);
     try {
       setData(await fetchPosts({ page, size: 20 }));
       setError("");
     } catch (loadError) {
       setError(errorText(loadError));
+    } finally {
+      setLoading(false);
     }
   };
   useEffect(() => { load(); }, []);
@@ -398,7 +402,7 @@ function PostManager({ categories }: { categories: Category[] }) {
       {editing && <PostEditor key={String(editing.id)} categories={categories} post={editing} onSaved={() => { setEditing(null); load(data.page); }} onCancel={() => setEditing(null)} />}
       <Panel title="게시글 편집">
         {error && <StatusError>{error}</StatusError>}
-        {data.content.length ? data.content.map(post => (
+        {loading ? <EmptyText>게시글 목록을 불러오는 중입니다.</EmptyText> : data.content.length ? data.content.map(post => (
           <ListRow key={post.id}>
             <div><strong>{post.title}</strong><p className="text-sm text-slate-500">{post.category} · {post.date}</p></div>
             <div className="flex gap-2">
@@ -407,7 +411,7 @@ function PostManager({ categories }: { categories: Category[] }) {
             </div>
           </ListRow>
         )) : <EmptyText>게시글이 없습니다.</EmptyText>}
-        <Pager data={data} onMove={load} />
+        {!loading && !error && <Pager data={data} onMove={load} />}
       </Panel>
     </div>
   );
@@ -474,32 +478,42 @@ function CategoryManager({ categories, error, reload }: { categories: Category[]
 function CommentManager() {
   const [data, setData] = useState<PageResponse<AdminComment>>(EMPTY_PAGE);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   const load = async (page = 0) => {
     if (page < 0) return;
+    setLoading(true);
     try {
       setData(await fetchAdminComments(page));
       setError("");
-    } catch (loadError) { setError(errorText(loadError)); }
+    } catch (loadError) {
+      setError(errorText(loadError));
+    } finally {
+      setLoading(false);
+    }
   };
   useEffect(() => { load(); }, []);
 
   const remove = async (id: number) => {
     if (!window.confirm("댓글을 삭제 처리할까요?")) return;
-    await deleteComment(id);
-    load(data.page);
+    try {
+      await deleteComment(id);
+      await load(data.page);
+    } catch (deleteError) {
+      setError(errorText(deleteError));
+    }
   };
   return (
     <Panel title="댓글 관리">
       {error && <StatusError>{error}</StatusError>}
-      <DataTable headers={["게시글", "작성자", "내용", "IP", "생성일", "작업"]}>
+      {loading ? <EmptyText>댓글 목록을 불러오는 중입니다.</EmptyText> : !error && <DataTable headers={["게시글", "작성자", "내용", "IP", "생성일", "작업"]}>
         {data.content.map(comment => (
           <tr key={comment.id}>
             <Cell>{comment.postTitle}</Cell><Cell>{comment.authorName}</Cell><Cell>{comment.content}</Cell><Cell mono>{comment.accessIp}</Cell><Cell>{comment.date}</Cell>
             <Cell><a className="mr-3 text-blue-600" href={`/post/${comment.postId}#comment-${comment.id}`} target="_blank" rel="noreferrer">열기</a><button onClick={() => remove(comment.id)} className="text-red-600">삭제</button></Cell>
           </tr>
         ))}
-      </DataTable>
-      <Pager data={data} onMove={load} />
+      </DataTable>}
+      {!loading && !error && <Pager data={data} onMove={load} />}
     </Panel>
   );
 }
@@ -507,21 +521,40 @@ function CommentManager() {
 function LogManager() {
   const [access, setAccess] = useState<PageResponse<AccessLog>>(EMPTY_PAGE);
   const [login, setLogin] = useState<PageResponse<LoginLog>>(EMPTY_PAGE);
-  const [error, setError] = useState("");
+  const [accessError, setAccessError] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [accessLoading, setAccessLoading] = useState(true);
+  const [loginLoading, setLoginLoading] = useState(true);
   const loadAccess = async (page = 0) => {
     if (page < 0) return;
-    try { setAccess(await fetchAccessLogs(page)); } catch (loadError) { setError(errorText(loadError)); }
+    setAccessLoading(true);
+    try {
+      setAccess(await fetchAccessLogs(page));
+      setAccessError("");
+    } catch (loadError) {
+      setAccessError(errorText(loadError));
+    } finally {
+      setAccessLoading(false);
+    }
   };
   const loadLogin = async (page = 0) => {
     if (page < 0) return;
-    try { setLogin(await fetchLoginLogs(page)); } catch (loadError) { setError(errorText(loadError)); }
+    setLoginLoading(true);
+    try {
+      setLogin(await fetchLoginLogs(page));
+      setLoginError("");
+    } catch (loadError) {
+      setLoginError(errorText(loadError));
+    } finally {
+      setLoginLoading(false);
+    }
   };
   useEffect(() => { loadAccess(); loadLogin(); }, []);
   return (
     <div className="space-y-5">
-      {error && <StatusError>{error}</StatusError>}
       <Panel title="접근 로그" subtitle="서버 오류 요청은 request ID와 stack trace를 확인할 수 있습니다.">
-        <DataTable headers={["IP", "Method", "Path", "Status", "Request ID", "Error", "Time"]}>
+        {accessError && <StatusError>{accessError}</StatusError>}
+        {accessLoading ? <EmptyText>접근 로그를 불러오는 중입니다.</EmptyText> : !accessError && <DataTable headers={["IP", "Method", "Path", "Status", "Request ID", "Error", "Time"]}>
           {access.content.map(log => (
             <tr key={log.id}>
               <Cell mono>{log.ip}</Cell><Cell>{log.method}</Cell><Cell>{log.path}</Cell><Cell>{log.statusCode}</Cell><Cell mono>{log.requestId ?? "-"}</Cell>
@@ -529,14 +562,15 @@ function LogManager() {
               <Cell>{log.timestamp}</Cell>
             </tr>
           ))}
-        </DataTable>
-        <Pager data={access} onMove={loadAccess} />
+        </DataTable>}
+        {!accessLoading && !accessError && <Pager data={access} onMove={loadAccess} />}
       </Panel>
       <Panel title="로그인 이력">
-        <DataTable headers={["Provider / Result", "Login ID", "IP", "Time"]}>
+        {loginError && <StatusError>{loginError}</StatusError>}
+        {loginLoading ? <EmptyText>로그인 이력을 불러오는 중입니다.</EmptyText> : !loginError && <DataTable headers={["Provider / Result", "Login ID", "IP", "Time"]}>
           {login.content.map(log => <tr key={log.id}><Cell>{log.provider}</Cell><Cell>{log.loginId}</Cell><Cell mono>{log.ip}</Cell><Cell>{log.timestamp}</Cell></tr>)}
-        </DataTable>
-        <Pager data={login} onMove={loadLogin} />
+        </DataTable>}
+        {!loginLoading && !loginError && <Pager data={login} onMove={loadLogin} />}
       </Panel>
     </div>
   );
@@ -552,7 +586,9 @@ function Cell({ children, mono = false }: { children: ReactNode; mono?: boolean 
   return <td className={`border-b border-slate-100 p-3 align-top ${mono ? "font-mono text-xs" : ""}`}>{children}</td>;
 }
 function Pager<T>({ data, onMove }: { data: PageResponse<T>; onMove: (page: number) => void }) {
-  return <div className="mt-5 flex items-center justify-center gap-4"><button disabled={data.page <= 0} onClick={() => onMove(data.page - 1)} className={secondaryButtonClass}>이전</button><span className="text-sm text-slate-500">{data.page + 1} / {Math.max(data.totalPages, 1)}</span><button disabled={data.last} onClick={() => onMove(data.page + 1)} className={secondaryButtonClass}>다음</button></div>;
+  const currentPage = Number.isInteger(data.page) && data.page >= 0 ? data.page : 0;
+  const totalPages = Number.isInteger(data.totalPages) && data.totalPages > 0 ? data.totalPages : 1;
+  return <div className="mt-5 flex items-center justify-center gap-4"><button disabled={currentPage <= 0} onClick={() => onMove(currentPage - 1)} className={secondaryButtonClass}>이전</button><span className="text-sm text-slate-500">{currentPage + 1} / {totalPages}</span><button disabled={data.last || currentPage + 1 >= totalPages} onClick={() => onMove(currentPage + 1)} className={secondaryButtonClass}>다음</button></div>;
 }
 function ListRow({ children }: { children: ReactNode }) {
   return <div className="flex items-center justify-between gap-4 border-b border-slate-100 py-4 last:border-0">{children}</div>;

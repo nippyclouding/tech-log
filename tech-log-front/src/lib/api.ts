@@ -9,6 +9,22 @@ export interface PageResponse<T> {
   last: boolean;
 }
 
+export function requirePageResponse<T>(value: unknown): PageResponse<T> {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    !Array.isArray((value as PageResponse<T>).content) ||
+    !Number.isInteger((value as PageResponse<T>).page) ||
+    !Number.isInteger((value as PageResponse<T>).size) ||
+    typeof (value as PageResponse<T>).totalElements !== "number" ||
+    !Number.isInteger((value as PageResponse<T>).totalPages) ||
+    typeof (value as PageResponse<T>).last !== "boolean"
+  ) {
+    throw new Error("페이지 응답 형식이 올바르지 않습니다.");
+  }
+  return value as PageResponse<T>;
+}
+
 export interface Category {
   id: number;
   name: string;
@@ -59,13 +75,13 @@ async function request<T>(input: RequestInfo | URL, init?: RequestInit): Promise
   return response.json();
 }
 
-export function fetchPosts(params: { page: number; size?: number; category?: string | null; q?: string }) {
+export async function fetchPosts(params: { page: number; size?: number; category?: string | null; q?: string }) {
   const searchParams = new URLSearchParams();
   searchParams.set("page", String(params.page));
   searchParams.set("size", String(params.size ?? 5));
   if (params.category) searchParams.set("category", params.category);
   if (params.q) searchParams.set("q", params.q);
-  return request<PageResponse<Post>>(`/api/posts?${searchParams.toString()}`);
+  return requirePageResponse<Post>(await request<unknown>(`/api/posts?${searchParams.toString()}`));
 }
 
 export function fetchPost(id: string | number) {
