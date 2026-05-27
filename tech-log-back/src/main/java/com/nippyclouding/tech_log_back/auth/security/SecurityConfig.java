@@ -47,7 +47,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/admin-console", "/api/admin/session/login", "/api/admin/session/logout").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/posts/*/comments").authenticated()
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/posts/*/comments").hasRole("USER")
+                        .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/posts/*/comments/*").hasRole("USER")
+                        .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/posts/*/comments/*").hasRole("USER")
                         .anyRequest().permitAll()
                 )
                 .formLogin(form -> form

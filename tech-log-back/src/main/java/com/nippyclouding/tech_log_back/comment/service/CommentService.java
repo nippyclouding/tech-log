@@ -10,6 +10,7 @@ import com.nippyclouding.tech_log_back.auth.security.GithubUser;
 import com.nippyclouding.tech_log_back.comment.dto.CommentCreateRequest;
 import com.nippyclouding.tech_log_back.comment.dto.AdminCommentResponse;
 import com.nippyclouding.tech_log_back.comment.dto.CommentResponse;
+import com.nippyclouding.tech_log_back.comment.dto.CommentUpdateRequest;
 import com.nippyclouding.tech_log_back.global.dto.PageResponse;
 import java.util.List;
 import org.springframework.data.domain.PageRequest;
@@ -25,10 +26,10 @@ public class CommentService {
     private final CommentRepository commentRepository;
     private final BoardRepository boardRepository;
 
-    public List<CommentResponse> findByBoard(Long boardId) {
+    public List<CommentResponse> findByBoard(Long boardId, Long viewerGithubId) {
         return commentRepository.findByBoardIdAndDeletedFalseOrderByUpdatedAtAsc(boardId)
                 .stream()
-                .map(CommentResponse::from)
+                .map(comment -> CommentResponse.from(comment, viewerGithubId))
                 .toList();
     }
 
@@ -55,7 +56,19 @@ public class CommentService {
                 githubUser.avatarUrl(),
                 accessIp
         );
-        return CommentResponse.from(commentRepository.save(comment));
+        return CommentResponse.from(commentRepository.save(comment), githubUser.id());
+    }
+
+    @Transactional
+    public CommentResponse update(Long boardId, Long id, CommentUpdateRequest request, GithubUser githubUser) {
+        Comment comment = findOwnedComment(boardId, id, githubUser);
+        comment.updateContent(request.content());
+        return CommentResponse.from(comment, githubUser.id());
+    }
+
+    @Transactional
+    public void deleteOwn(Long boardId, Long id, GithubUser githubUser) {
+        findOwnedComment(boardId, id, githubUser).delete();
     }
 
     @Transactional
@@ -63,5 +76,17 @@ public class CommentService {
         Comment comment = commentRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.COMMENT_NOT_FOUND));
         comment.delete();
+    }
+
+    private Comment findOwnedComment(Long boardId, Long id, GithubUser githubUser) {
+        Comment comment = commentRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.COMMENT_NOT_FOUND));
+        if (comment.isDeleted() || !comment.getBoard().getId().equals(boardId)) {
+            throw new BusinessException(ErrorCode.COMMENT_NOT_FOUND);
+        }
+        if (!comment.getGithubId().equals(githubUser.id())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        return comment;
     }
 }

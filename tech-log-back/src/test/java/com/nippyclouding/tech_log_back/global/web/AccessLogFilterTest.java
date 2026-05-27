@@ -38,6 +38,15 @@ class AccessLogFilterTest {
     }
 
     @Test
+    void recordsCommentUpdateAndDeletion() throws Exception {
+        filter("PUT", "/api/posts/1/comments/2", 200);
+        filter("DELETE", "/api/posts/1/comments/2", 204);
+
+        verify(accessLogService).record("127.0.0.1", "/api/posts/1/comments/2", "PUT", 200, "unassigned", null, null, null);
+        verify(accessLogService).record("127.0.0.1", "/api/posts/1/comments/2", "DELETE", 204, "unassigned", null, null, null);
+    }
+
+    @Test
     void recordsAdminAuthorizationFailure() throws Exception {
         filter("GET", "/api/admin/comments", 403);
 
