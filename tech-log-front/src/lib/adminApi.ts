@@ -1,4 +1,4 @@
-import { Category, PageResponse } from "./api";
+import { Category, PageResponse, requirePageResponse } from "./api";
 import { Post } from "../types/blog";
 
 export interface AdminComment {
@@ -96,18 +96,18 @@ export function deleteCategory(id: number) {
   return adminRequest<void>(`/api/admin/categories/${id}`, { method: "DELETE" });
 }
 
-export function fetchAdminComments(page: number) {
-  return adminRequest<PageResponse<AdminComment>>(`/api/admin/comments?page=${page}&size=10`);
+export async function fetchAdminComments(page: number) {
+  return requirePageResponse<AdminComment>(await adminRequest<unknown>(`/api/admin/comments?page=${page}&size=10`));
 }
 
 export function deleteComment(id: number) {
   return adminRequest<void>(`/api/admin/comments/${id}`, { method: "DELETE" });
 }
 
-export function fetchAccessLogs(page: number) {
-  return adminRequest<PageResponse<AccessLog>>(`/api/admin/access-logs?page=${page}&size=20`);
+export async function fetchAccessLogs(page: number) {
+  return requirePageResponse<AccessLog>(await adminRequest<unknown>(`/api/admin/access-logs?page=${page}&size=20`));
 }
 
-export function fetchLoginLogs(page: number) {
-  return adminRequest<PageResponse<LoginLog>>(`/api/admin/login-logs?page=${page}&size=20`);
+export async function fetchLoginLogs(page: number) {
+  return requirePageResponse<LoginLog>(await adminRequest<unknown>(`/api/admin/login-logs?page=${page}&size=20`));
 }
