@@ -17,6 +17,21 @@ class LocalImageStorageServiceTest {
     Path tempDir;
 
     @Test
+    void store_savesImageAndReturnsPublicUrl() {
+        LocalImageStorageService service = new LocalImageStorageService(
+                new ImageStorageProperties(tempDir.toString(), "/image", DataSize.ofMegabytes(20))
+        );
+        MockMultipartFile file = new MockMultipartFile("images", "poster.png", "image/png", "image".getBytes());
+
+        StoredImage stored = service.store(List.of(file)).get(0);
+
+        assertThat(stored.publicUrl()).isEqualTo("/image/" + stored.storedName());
+        assertThat(stored.originalName()).isEqualTo("poster.png");
+        assertThat(stored.thumbnail()).isTrue();
+        assertThat(tempDir.resolve(stored.storedName())).exists();
+    }
+
+    @Test
     void deleteStoredFiles_deletesOnlyFilesInsideUploadDirectory() throws Exception {
         Path uploadedFile = Files.writeString(tempDir.resolve("stored.png"), "image");
         Path outsideFile = Files.writeString(tempDir.resolveSibling(tempDir.getFileName() + "-outside.png"), "outside");

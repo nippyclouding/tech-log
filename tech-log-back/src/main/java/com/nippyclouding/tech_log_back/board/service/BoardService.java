@@ -114,12 +114,12 @@ public class BoardService {
         cleanupStoredImagesOnRollback(storedImages);
         board.update(request.title(), replaceImagePlaceholders(request.content(), storedImages));
         replaceCategories(board, request.category(), request.tags(), request.categories());
-        if (!storedImages.isEmpty()) {
-            List<Image> retainedImages = referencedUploadedImages(board, board.getContent(), null);
-            List<String> obsoleteStoredNames = unreferencedUploadedStoredNames(board, board.getContent(), null);
+        List<Image> retainedImages = referencedUploadedImages(board, board.getContent(), null);
+        List<String> obsoleteStoredNames = unreferencedUploadedStoredNames(board, board.getContent(), null);
+        if (!storedImages.isEmpty() || !obsoleteStoredNames.isEmpty()) {
             replaceUploadedImages(board, storedImages, retainedImages);
-            deleteStoredFilesAfterCommit(obsoleteStoredNames);
         }
+        deleteStoredFilesAfterCommit(obsoleteStoredNames);
         return toDetail(board);
     }
 
@@ -174,7 +174,8 @@ public class BoardService {
     private void replaceCoverImageUrl(Board board, String coverImage, List<Image> retainedImages) {
         imageRepository.deleteByBoard(board);
         board.getImages().clear();
-        if (coverImage != null && !coverImage.isBlank()) {
+        boolean hasCoverImage = coverImage != null && !coverImage.isBlank();
+        if (hasCoverImage) {
             Image image = new Image(
                     board,
                     StorageType.LOCAL,
@@ -189,7 +190,7 @@ public class BoardService {
             board.getImages().add(image);
             imageRepository.save(image);
         }
-        retainUploadedImages(board, retainedImages);
+        retainUploadedImages(board, retainedImages, !hasCoverImage);
     }
 
     private void replaceUploadedImages(Board board, List<StoredImage> storedImages, List<Image> retainedImages) {
@@ -211,7 +212,7 @@ public class BoardService {
                     board.getImages().add(image);
                     imageRepository.save(image);
                 });
-        retainUploadedImages(board, retainedImages);
+        retainUploadedImages(board, retainedImages, storedImages.isEmpty());
     }
 
     private String replaceImagePlaceholders(String content, List<StoredImage> images) {
@@ -224,8 +225,8 @@ public class BoardService {
             );
             replaced = replaced.replace("pending-image:" + i, image.publicUrl());
         }
-        if (!images.isEmpty() && replaced.contains("pending-image:")) {
-            throw new IllegalArgumentException("Invalid image placeholder in content.");
+        if (replaced.contains("pending-image:")) {
+            throw new IllegalArgumentException("본문에 배치한 이미지 파일을 다시 선택하세요.");
         }
         boolean hasInsertedImage = images.stream().anyMatch(image -> content.contains("pending-image:" + image.order()));
         if (!images.isEmpty() && !hasInsertedImage) {
@@ -345,7 +346,7 @@ public class BoardService {
                 .toList();
     }
 
-    private void retainUploadedImages(Board board, List<Image> retainedImages) {
+    private void retainUploadedImages(Board board, List<Image> retainedImages, boolean preserveThumbnail) {
         retainedImages.stream()
                 .map(image -> new Image(
                         board,
@@ -356,7 +357,7 @@ public class BoardService {
                         image.getContentType(),
                         image.getFileSize(),
                         image.getImageOrder(),
-                        false
+                        preserveThumbnail && image.isThumbnail()
                 ))
                 .forEach(image -> {
                     board.getImages().add(image);

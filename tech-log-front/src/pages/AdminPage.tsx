@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { Category, CurrentUser, fetchCategories, fetchCurrentUser, fetchPost, fetchPosts, PageResponse } from "../lib/api";
 import { FormattedMarkdown } from "../components/blog/FormattedMarkdown";
 import {
@@ -170,6 +170,8 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
   const [status, setStatus] = useState("");
   const [draftState, setDraftState] = useState(draft ? "임시 저장 대기" : "");
   const textarea = useRef<HTMLTextAreaElement>(null);
+  const imageInput = useRef<HTMLInputElement>(null);
+  const selection = useRef({ start: content.length, end: content.length });
 
   useEffect(() => {
     if (!draft || post) return;
@@ -177,9 +179,11 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
       const stored = localStorage.getItem(draftKey);
       if (!stored) return;
       const saved = JSON.parse(stored);
+      const savedContent = saved.content ?? "";
       setTitle(saved.title ?? "");
-      setContent(saved.content ?? "");
+      setContent(savedContent);
       setSelectedCategories(Array.isArray(saved.categories) ? saved.categories : []);
+      selection.current = { start: savedContent.length, end: savedContent.length };
       setDraftState("임시 저장 복원됨");
     } catch {
       setDraftState("임시 저장 불가");
@@ -187,6 +191,7 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
   }, [draft, post]);
 
   useEffect(() => {
+    if (!categories.length) return;
     setSelectedCategories(current => current.filter(name => categories.some(category => category.name === name)));
   }, [categories]);
 
@@ -221,11 +226,22 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
     saveDraft(title, content, next);
   };
 
+  const rememberSelection = (element: HTMLTextAreaElement) => {
+    selection.current = { start: element.selectionStart, end: element.selectionEnd };
+  };
+
+  const focusTextareaAt = (position: number) => {
+    requestAnimationFrame(() => {
+      const element = textarea.current;
+      if (!element) return;
+      element.focus();
+      element.setSelectionRange(position, position);
+      selection.current = { start: position, end: position };
+    });
+  };
+
   const insert = (format: string) => {
-    const element = textarea.current;
-    if (!element) return;
-    const start = element.selectionStart;
-    const end = element.selectionEnd;
+    const { start, end } = selection.current;
     const selected = content.slice(start, end);
     const replacements: Record<string, string> = {
       heading: `## ${selected || "소제목"}`,
@@ -240,12 +256,13 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
       alignLeft: `\n\n[align=left]\n${selected || "왼쪽 정렬할 문단"}\n[/align]\n\n`,
       alignCenter: `\n\n[align=center]\n${selected || "가운데 정렬할 문단"}\n[/align]\n\n`,
       alignRight: `\n\n[align=right]\n${selected || "오른쪽 정렬할 문단"}\n[/align]\n\n`,
-      gap: selected ? `${selected}\n\n` : "\n\n",
+      lineBreak: `${selected}  \n`,
     };
-    const next = content.slice(0, start) + replacements[format] + content.slice(end);
+    const replacement = replacements[format];
+    const next = content.slice(0, start) + replacement + content.slice(end);
     updateContent(next);
     setPreview(false);
-    requestAnimationFrame(() => element.focus());
+    focusTextareaAt(start + replacement.length);
   };
 
   const insertImages = () => {
@@ -253,8 +270,29 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
       setStatus("먼저 이미지를 선택하세요.");
       return;
     }
-    const placeholder = files.map((_, index) => `\n\n![이미지 ${index + 1}](pending-image:${index})\n\n`).join("");
-    updateContent(content + placeholder);
+    const notInserted = files
+      .map((_, index) => index)
+      .filter(index => !new RegExp(`pending-image:${index}(?!\\d)`).test(content));
+    if (!notInserted.length) {
+      setStatus("선택한 이미지는 이미 본문에 삽입되어 있습니다.");
+      return;
+    }
+    const placeholder = notInserted
+      .map(index => `\n\n![이미지 ${index + 1}](pending-image:${index})\n\n`)
+      .join("");
+    const position = selection.current.start;
+    updateContent(content.slice(0, position) + placeholder + content.slice(position));
+    setPreview(false);
+    setStatus(`${notInserted.length}개 이미지 위치를 본문에 삽입했습니다.`);
+    focusTextareaAt(position + placeholder.length);
+  };
+
+  const selectImages = (event: ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(event.target.files ?? []);
+    if (!selected.length) return;
+    setFiles(current => [...current, ...selected]);
+    setStatus(`${selected.length}개 파일을 추가했습니다. Image 버튼을 눌러 본문에 배치하세요.`);
+    event.target.value = "";
   };
 
   const reset = () => {
@@ -264,6 +302,7 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
     setFiles([]);
     setPreview(false);
     setStatus("");
+    if (imageInput.current) imageInput.current.value = "";
     if (draft) {
       localStorage.removeItem(draftKey);
       setDraftState("임시 저장 대기");
@@ -309,17 +348,28 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
       <div className="grid md:grid-cols-[1fr_300px]">
         <div className="min-w-0 border-r border-slate-100">
           <div className="flex flex-wrap gap-1 border-b border-slate-200 p-3">
-            {[["heading", "H2"], ["bold", "Bold"], ["italic", "Italic"], ["underline", "Underline"], ["quote", "Quote"], ["list", "List"], ["code", "Code"], ["link", "Link"], ["divider", "HR"], ["alignLeft", "Left"], ["alignCenter", "Center"], ["alignRight", "Right"], ["gap", "Gap"]].map(([key, label]) => (
-              <button type="button" key={key} onClick={() => insert(key)} className={toolButtonClass}>{label}</button>
+            {[["heading", "H2"], ["bold", "Bold"], ["italic", "Italic"], ["underline", "Underline"], ["quote", "Quote"], ["list", "List"], ["code", "Code"], ["link", "Link"], ["divider", "HR"], ["alignLeft", "Left"], ["alignCenter", "Center"], ["alignRight", "Right"], ["lineBreak", "BR"]].map(([key, label]) => (
+              <button type="button" key={key} onMouseDown={event => event.preventDefault()} onClick={() => insert(key)} className={toolButtonClass}>{label}</button>
             ))}
-            <button type="button" onClick={insertImages} className={toolButtonClass}>Image</button>
+            <button type="button" onMouseDown={event => event.preventDefault()} onClick={insertImages} className={toolButtonClass}>Image</button>
             <div className="ml-auto flex gap-1">
               <SubnavButton active={!preview} onClick={() => setPreview(false)}>편집</SubnavButton>
               <SubnavButton active={preview} onClick={() => setPreview(true)}>미리보기</SubnavButton>
             </div>
           </div>
           {!preview ? (
-            <textarea ref={textarea} value={content} onChange={event => updateContent(event.target.value)} required placeholder="본문을 마크다운으로 입력하세요." className="min-h-[520px] w-full resize-y border-0 p-8 text-base leading-8 outline-none" />
+            <textarea
+              ref={textarea}
+              value={content}
+              onChange={event => {
+                updateContent(event.target.value);
+                rememberSelection(event.target);
+              }}
+              onSelect={event => rememberSelection(event.currentTarget)}
+              required
+              placeholder="본문을 마크다운으로 입력하세요."
+              className="min-h-[520px] w-full resize-y border-0 p-8 text-base leading-8 outline-none"
+            />
           ) : (
             <article className="markdown-body min-h-[520px] p-8">
               {content ? <FormattedMarkdown content={content} allowPendingImages imageComponent={PreviewImage} /> : <p>작성한 글의 미리보기가 여기에 표시됩니다.</p>}
@@ -344,8 +394,13 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
           </div>
           <hr className="my-6 border-slate-200" />
           <h3 className="mb-3 font-bold">이미지</h3>
-          <input type="file" accept="image/*" multiple onChange={event => setFiles(Array.from(event.target.files ?? []))} className="w-full rounded-lg border border-dashed border-slate-300 bg-white p-3 text-xs" />
-          <p className="mt-2 text-xs leading-5 text-slate-500">파일을 고른 뒤 Image 버튼으로 본문 위치를 표시하세요.</p>
+          <input ref={imageInput} type="file" accept="image/*" multiple onChange={selectImages} className="w-full rounded-lg border border-dashed border-slate-300 bg-white p-3 text-xs" />
+          <p className="mt-2 text-xs leading-5 text-slate-500">파일을 추가한 뒤 Image 버튼으로 커서 위치에 배치하세요. 여러 번 선택해도 앞선 파일은 유지됩니다.</p>
+          {files.length > 0 && (
+            <ul className="mt-3 space-y-1 text-xs text-slate-600">
+              {files.map((file, index) => <li key={`${file.name}-${index}`}>{index + 1}. {file.name}</li>)}
+            </ul>
+          )}
           <hr className="my-6 border-slate-200" />
           <p className="text-xs text-slate-500">본문 {content.length}자 · 단어 {words}개</p>
           {status && <p className="mt-4 text-sm font-semibold text-blue-700">{status}</p>}

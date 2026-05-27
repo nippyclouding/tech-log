@@ -37,12 +37,12 @@ public class AdminBoardController {
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<PostDetailResponse> createWithImages(
-            @RequestParam String title,
-            @RequestParam(required = false) String category,
-            @RequestParam(required = false) List<String> categories,
-            @RequestParam String content,
-            @RequestParam(required = false) String tags,
-            @RequestPart(required = false) List<MultipartFile> images
+            @RequestParam(name = "title") String title,
+            @RequestParam(name = "category", required = false) String category,
+            @RequestParam(name = "categories", required = false) List<String> categories,
+            @RequestParam(name = "content") String content,
+            @RequestParam(name = "tags", required = false) String tags,
+            @RequestPart(name = "images", required = false) List<MultipartFile> images
     ) {
         List<String> selectedCategories = normalizeCategories(category, categories);
         PostCreateRequest request = new PostCreateRequest(title, null, content, selectedCategories.get(0), null, splitTags(tags), selectedCategories);
@@ -58,12 +58,12 @@ public class AdminBoardController {
     @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<PostDetailResponse> updateWithImages(
             @PathVariable Long id,
-            @RequestParam String title,
-            @RequestParam(required = false) String category,
-            @RequestParam(required = false) List<String> categories,
-            @RequestParam String content,
-            @RequestParam(required = false) String tags,
-            @RequestPart(required = false) List<MultipartFile> images
+            @RequestParam(name = "title") String title,
+            @RequestParam(name = "category", required = false) String category,
+            @RequestParam(name = "categories", required = false) List<String> categories,
+            @RequestParam(name = "content") String content,
+            @RequestParam(name = "tags", required = false) String tags,
+            @RequestPart(name = "images", required = false) List<MultipartFile> images
     ) {
         List<String> selectedCategories = normalizeCategories(category, categories);
         PostUpdateRequest request = new PostUpdateRequest(title, null, content, selectedCategories.get(0), null, splitTags(tags), selectedCategories);
