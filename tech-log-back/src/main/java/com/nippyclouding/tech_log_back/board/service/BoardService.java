@@ -22,6 +22,8 @@ import com.nippyclouding.tech_log_back.board.dto.PostUpdateRequest;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -40,6 +42,8 @@ public class BoardService {
 
     private static final String DEFAULT_COVER_IMAGE = "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&auto=format&fit=crop";
     private static final int MAX_PUBLIC_PAGE_SIZE = 50;
+    private static final Pattern PENDING_IMAGE_PATTERN = Pattern.compile("pending-image:(\\d+)(?!\\d)");
+    private static final Pattern LEGACY_PENDING_IMAGE_LINK_PATTERN = Pattern.compile("\\[이미지: [\\s\\S]*?]\\(pending-image:(\\d+)(?!\\d)\\)");
 
     private final BoardRepository boardRepository;
     private final CategoryRepository categoryRepository;
@@ -87,9 +91,13 @@ public class BoardService {
     public PostDetailResponse create(PostCreateRequest request, List<MultipartFile> images) {
         List<StoredImage> storedImages = localImageStorageService.store(images);
         cleanupStoredImagesOnRollback(storedImages);
-        Board board = boardRepository.save(new Board(request.title(), replaceImagePlaceholders(request.content(), storedImages)));
+        String content = replaceImagePlaceholders(request.content(), storedImages);
+        List<StoredImage> referencedImages = referencedStoredImages(content, storedImages);
+        List<String> unusedStoredNames = unreferencedStoredNames(storedImages, referencedImages);
+        Board board = boardRepository.save(new Board(request.title(), content));
         replaceCategories(board, request.category(), request.tags(), request.categories());
-        replaceUploadedImages(board, storedImages, List.of());
+        replaceUploadedImages(board, referencedImages, List.of());
+        deleteStoredFilesAfterCommit(unusedStoredNames);
         PostDetailResponse response = toDetail(board);
         publishPostCreated(response);
         return response;
@@ -112,13 +120,17 @@ public class BoardService {
         Board board = findBoard(id);
         List<StoredImage> storedImages = localImageStorageService.store(images);
         cleanupStoredImagesOnRollback(storedImages);
-        board.update(request.title(), replaceImagePlaceholders(request.content(), storedImages));
+        String content = replaceImagePlaceholders(request.content(), storedImages);
+        List<StoredImage> referencedNewImages = referencedStoredImages(content, storedImages);
+        List<String> unusedNewStoredNames = unreferencedStoredNames(storedImages, referencedNewImages);
+        board.update(request.title(), content);
         replaceCategories(board, request.category(), request.tags(), request.categories());
         List<Image> retainedImages = referencedUploadedImages(board, board.getContent(), null);
         List<String> obsoleteStoredNames = unreferencedUploadedStoredNames(board, board.getContent(), null);
-        if (!storedImages.isEmpty() || !obsoleteStoredNames.isEmpty()) {
-            replaceUploadedImages(board, storedImages, retainedImages);
+        if (!referencedNewImages.isEmpty() || !obsoleteStoredNames.isEmpty()) {
+            replaceUploadedImages(board, referencedNewImages, retainedImages);
         }
+        deleteStoredFilesAfterCommit(unusedNewStoredNames);
         deleteStoredFilesAfterCommit(obsoleteStoredNames);
         return toDetail(board);
     }
@@ -196,46 +208,68 @@ public class BoardService {
     private void replaceUploadedImages(Board board, List<StoredImage> storedImages, List<Image> retainedImages) {
         imageRepository.deleteByBoard(board);
         board.getImages().clear();
-        storedImages.stream()
-                .map(image -> new Image(
-                        board,
-                        StorageType.LOCAL,
-                        image.publicUrl(),
-                        image.originalName(),
-                        image.storedName(),
-                        image.contentType(),
-                        image.fileSize(),
-                        image.order(),
-                        image.thumbnail()
-                ))
-                .forEach(image -> {
-                    board.getImages().add(image);
-                    imageRepository.save(image);
-                });
+        for (int i = 0; i < storedImages.size(); i++) {
+            StoredImage storedImage = storedImages.get(i);
+            Image image = new Image(
+                    board,
+                    StorageType.LOCAL,
+                    storedImage.publicUrl(),
+                    storedImage.originalName(),
+                    storedImage.storedName(),
+                    storedImage.contentType(),
+                    storedImage.fileSize(),
+                    i,
+                    i == 0
+            );
+            board.getImages().add(image);
+            imageRepository.save(image);
+        }
         retainUploadedImages(board, retainedImages, storedImages.isEmpty());
     }
 
     private String replaceImagePlaceholders(String content, List<StoredImage> images) {
-        String replaced = content;
-        for (int i = images.size() - 1; i >= 0; i--) {
-            StoredImage image = images.get(i);
-            replaced = replaced.replace(
-                    "[이미지: " + image.originalName() + "](pending-image:" + i + ")",
-                    "![이미지 " + (i + 1) + "](" + image.publicUrl() + ")"
-            );
-            replaced = replaced.replace("pending-image:" + i, image.publicUrl());
+        Matcher legacyMatcher = LEGACY_PENDING_IMAGE_LINK_PATTERN.matcher(content);
+        StringBuilder legacyReplaced = new StringBuilder();
+        while (legacyMatcher.find()) {
+            int imageIndex = Integer.parseInt(legacyMatcher.group(1));
+            if (imageIndex < 0 || imageIndex >= images.size()) {
+                throw new IllegalArgumentException("본문에 배치한 이미지 파일을 다시 선택하세요.");
+            }
+            String imageMarkdown = "![이미지 " + (imageIndex + 1) + "](" + images.get(imageIndex).publicUrl() + ")";
+            legacyMatcher.appendReplacement(legacyReplaced, Matcher.quoteReplacement(imageMarkdown));
         }
-        if (replaced.contains("pending-image:")) {
+        legacyMatcher.appendTail(legacyReplaced);
+
+        Matcher matcher = PENDING_IMAGE_PATTERN.matcher(legacyReplaced.toString());
+        StringBuilder replaced = new StringBuilder();
+        while (matcher.find()) {
+            int imageIndex = Integer.parseInt(matcher.group(1));
+            if (imageIndex < 0 || imageIndex >= images.size()) {
+                throw new IllegalArgumentException("본문에 배치한 이미지 파일을 다시 선택하세요.");
+            }
+            matcher.appendReplacement(replaced, Matcher.quoteReplacement(images.get(imageIndex).publicUrl()));
+        }
+        matcher.appendTail(replaced);
+        if (replaced.indexOf("pending-image:") >= 0) {
             throw new IllegalArgumentException("본문에 배치한 이미지 파일을 다시 선택하세요.");
         }
-        boolean hasInsertedImage = images.stream().anyMatch(image -> content.contains("pending-image:" + image.order()));
-        if (!images.isEmpty() && !hasInsertedImage) {
-            String appendedImages = images.stream()
-                    .map(image -> "\n\n![" + image.originalName() + "](" + image.publicUrl() + ")")
-                    .reduce("", String::concat);
-            return replaced + appendedImages;
-        }
-        return replaced;
+        return replaced.toString();
+    }
+
+    private List<StoredImage> referencedStoredImages(String content, List<StoredImage> storedImages) {
+        return storedImages.stream()
+                .filter(image -> content.contains(image.publicUrl()))
+                .toList();
+    }
+
+    private List<String> unreferencedStoredNames(List<StoredImage> storedImages, List<StoredImage> referencedImages) {
+        Set<String> referencedStoredNames = referencedImages.stream()
+                .map(StoredImage::storedName)
+                .collect(java.util.stream.Collectors.toSet());
+        return storedImages.stream()
+                .map(StoredImage::storedName)
+                .filter(storedName -> !referencedStoredNames.contains(storedName))
+                .toList();
     }
 
     private PostSummaryResponse toSummary(Board board) {

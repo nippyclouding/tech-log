@@ -266,24 +266,30 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
   };
 
   const insertImages = () => {
-    if (!files.length) {
+    const nextIndex = files.findIndex((_, index) => !hasPendingImage(content, index));
+    if (nextIndex < 0) {
       setStatus("먼저 이미지를 선택하세요.");
       return;
     }
-    const notInserted = files
-      .map((_, index) => index)
-      .filter(index => !new RegExp(`pending-image:${index}(?!\\d)`).test(content));
-    if (!notInserted.length) {
-      setStatus("선택한 이미지는 이미 본문에 삽입되어 있습니다.");
+    insertImage(nextIndex);
+  };
+
+  const insertImage = (index: number) => {
+    const file = files[index];
+    if (!file) {
+      setStatus("삽입할 이미지 파일을 찾지 못했습니다.");
       return;
     }
-    const placeholder = notInserted
-      .map(index => `\n\n![이미지 ${index + 1}](pending-image:${index})\n\n`)
-      .join("");
+    if (hasPendingImage(content, index)) {
+      setStatus("이미 본문에 삽입된 이미지입니다.");
+      return;
+    }
+    const placeholder = `\n\n![${safeImageAlt(file.name, index)}](pending-image:${index})\n\n`;
     const position = selection.current.start;
-    updateContent(content.slice(0, position) + placeholder + content.slice(position));
+    const nextContent = content.slice(0, position) + placeholder + content.slice(position);
+    updateContent(nextContent);
     setPreview(false);
-    setStatus(`${notInserted.length}개 이미지 위치를 본문에 삽입했습니다.`);
+    setStatus(`${file.name} 이미지 위치를 본문에 삽입했습니다.`);
     focusTextareaAt(position + placeholder.length);
   };
 
@@ -316,10 +322,15 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
       return;
     }
     const form = new FormData();
+    const preparedImages = prepareImagesForSubmit(content, files);
+    if (preparedImages.error) {
+      setStatus(preparedImages.error);
+      return;
+    }
     form.set("title", title);
-    form.set("content", content);
+    form.set("content", preparedImages.content);
     selectedCategories.forEach(category => form.append("categories", category));
-    files.forEach(file => form.append("images", file));
+    preparedImages.files.forEach(file => form.append("images", file));
     try {
       await savePost(post?.id ?? null, form);
       setStatus("게시글이 저장되었습니다.");
@@ -397,8 +408,21 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
           <input ref={imageInput} type="file" accept="image/*" multiple onChange={selectImages} className="w-full rounded-lg border border-dashed border-slate-300 bg-white p-3 text-xs" />
           <p className="mt-2 text-xs leading-5 text-slate-500">파일을 추가한 뒤 Image 버튼으로 커서 위치에 배치하세요. 여러 번 선택해도 앞선 파일은 유지됩니다.</p>
           {files.length > 0 && (
-            <ul className="mt-3 space-y-1 text-xs text-slate-600">
-              {files.map((file, index) => <li key={`${file.name}-${index}`}>{index + 1}. {file.name}</li>)}
+            <ul className="mt-3 space-y-2 text-xs text-slate-600">
+              {files.map((file, index) => {
+                const inserted = hasPendingImage(content, index);
+                return (
+                  <li key={`${file.name}-${index}`} className="rounded-lg border border-slate-200 bg-white p-2">
+                    <div className="font-semibold text-slate-700">{index + 1}. {file.name}</div>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <span className={inserted ? "text-blue-600" : "text-slate-400"}>{inserted ? "본문 삽입됨" : "미삽입"}</span>
+                      <button type="button" onClick={() => insertImage(index)} disabled={inserted} className="rounded-md border border-slate-200 px-2 py-1 font-bold disabled:cursor-not-allowed disabled:opacity-40">
+                        삽입
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
           <hr className="my-6 border-slate-200" />
@@ -419,6 +443,42 @@ function PreviewImage({ src, alt }: { src?: string; alt?: string }) {
     return <span className="block rounded-lg border border-dashed border-blue-200 bg-blue-50 p-6 text-center text-blue-600">업로드 예정 이미지 · {alt}</span>;
   }
   return <img src={src} alt={alt ?? ""} className="my-5 max-w-full rounded-xl" />;
+}
+
+function hasPendingImage(content: string, index: number) {
+  return new RegExp(`pending-image:${index}(?!\\d)`).test(content);
+}
+
+function safeImageAlt(filename: string, index: number) {
+  const extensionRemoved = filename.replace(/\.[^.]+$/, "").trim();
+  const normalized = extensionRemoved.replace(/[[\]()]/g, "").replace(/\s+/g, " ").trim();
+  return normalized || `이미지 ${index + 1}`;
+}
+
+function prepareImagesForSubmit(content: string, files: File[]) {
+  const references = [...content.matchAll(/pending-image:(\d+)(?!\d)/g)].map(match => Number(match[1]));
+  const orderedReferences = Array.from(new Set(references));
+  const missing = orderedReferences.find(index => !Number.isInteger(index) || index < 0 || index >= files.length);
+  if (missing !== undefined) {
+    return {
+      content,
+      files: [],
+      error: "본문에 배치한 이미지 파일을 다시 선택하세요.",
+    };
+  }
+
+  const indexMap = new Map<number, number>();
+  orderedReferences.forEach((oldIndex, newIndex) => indexMap.set(oldIndex, newIndex));
+  const remappedContent = content.replace(/pending-image:(\d+)(?!\d)/g, (_match, indexText: string) => {
+    const nextIndex = indexMap.get(Number(indexText));
+    return `pending-image:${nextIndex}`;
+  });
+
+  return {
+    content: remappedContent,
+    files: orderedReferences.map(index => files[index]),
+    error: "",
+  };
 }
 
 function PostManager({ categories }: { categories: Category[] }) {
