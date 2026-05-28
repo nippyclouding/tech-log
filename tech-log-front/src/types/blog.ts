@@ -12,6 +12,15 @@ export interface Post {
   category: string;
   tags: string[];
   coverImage: string;
+  images?: PostImage[];
   published?: boolean;
   views?: number;
+}
+
+export interface PostImage {
+  url: string;
+  originalName: string;
+  storedName: string;
+  order: number;
+  thumbnail: boolean;
 }

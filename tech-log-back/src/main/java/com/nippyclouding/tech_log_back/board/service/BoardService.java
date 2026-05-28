@@ -17,6 +17,7 @@ import com.nippyclouding.tech_log_back.global.exception.ErrorCode;
 import com.nippyclouding.tech_log_back.global.dto.PageResponse;
 import com.nippyclouding.tech_log_back.board.dto.PostCreateRequest;
 import com.nippyclouding.tech_log_back.board.dto.PostDetailResponse;
+import com.nippyclouding.tech_log_back.board.dto.PostImageResponse;
 import com.nippyclouding.tech_log_back.board.dto.PostSummaryResponse;
 import com.nippyclouding.tech_log_back.board.dto.PostUpdateRequest;
 import java.util.LinkedHashSet;
@@ -92,11 +93,12 @@ public class BoardService {
         List<StoredImage> storedImages = localImageStorageService.store(images);
         cleanupStoredImagesOnRollback(storedImages);
         String content = replaceImagePlaceholders(request.content(), storedImages);
-        List<StoredImage> referencedImages = referencedStoredImages(content, storedImages);
+        String coverImage = replaceImagePlaceholders(blankToNull(request.coverImage()), storedImages);
+        List<StoredImage> referencedImages = referencedStoredImages(content, coverImage, storedImages);
         List<String> unusedStoredNames = unreferencedStoredNames(storedImages, referencedImages);
         Board board = boardRepository.save(new Board(request.title(), content));
         replaceCategories(board, request.category(), request.tags(), request.categories());
-        replaceUploadedImages(board, referencedImages, List.of());
+        replaceUploadedImages(board, referencedImages, List.of(), coverImage);
         deleteStoredFilesAfterCommit(unusedStoredNames);
         PostDetailResponse response = toDetail(board);
         publishPostCreated(response);
@@ -121,14 +123,15 @@ public class BoardService {
         List<StoredImage> storedImages = localImageStorageService.store(images);
         cleanupStoredImagesOnRollback(storedImages);
         String content = replaceImagePlaceholders(request.content(), storedImages);
-        List<StoredImage> referencedNewImages = referencedStoredImages(content, storedImages);
+        String coverImage = replaceImagePlaceholders(blankToNull(request.coverImage()), storedImages);
+        List<StoredImage> referencedNewImages = referencedStoredImages(content, coverImage, storedImages);
         List<String> unusedNewStoredNames = unreferencedStoredNames(storedImages, referencedNewImages);
         board.update(request.title(), content);
         replaceCategories(board, request.category(), request.tags(), request.categories());
-        List<Image> retainedImages = referencedUploadedImages(board, board.getContent(), null);
-        List<String> obsoleteStoredNames = unreferencedUploadedStoredNames(board, board.getContent(), null);
-        if (!referencedNewImages.isEmpty() || !obsoleteStoredNames.isEmpty()) {
-            replaceUploadedImages(board, referencedNewImages, retainedImages);
+        List<Image> retainedImages = referencedUploadedImages(board, board.getContent(), coverImage);
+        List<String> obsoleteStoredNames = unreferencedUploadedStoredNames(board, board.getContent(), coverImage);
+        if (!referencedNewImages.isEmpty() || !obsoleteStoredNames.isEmpty() || coverImage != null) {
+            replaceUploadedImages(board, referencedNewImages, retainedImages, coverImage);
         }
         deleteStoredFilesAfterCommit(unusedNewStoredNames);
         deleteStoredFilesAfterCommit(obsoleteStoredNames);
@@ -202,14 +205,17 @@ public class BoardService {
             board.getImages().add(image);
             imageRepository.save(image);
         }
-        retainUploadedImages(board, retainedImages, !hasCoverImage);
+        retainUploadedImages(board, retainedImages, hasCoverImage ? normalizeCoverImage(coverImage) : null, hasCoverImage, hasCoverImage ? 1 : 0);
     }
 
-    private void replaceUploadedImages(Board board, List<StoredImage> storedImages, List<Image> retainedImages) {
+    private void replaceUploadedImages(Board board, List<StoredImage> storedImages, List<Image> retainedImages, String coverImage) {
         imageRepository.deleteByBoard(board);
         board.getImages().clear();
+        int order = 0;
+        boolean thumbnailAssigned = false;
         for (int i = 0; i < storedImages.size(); i++) {
             StoredImage storedImage = storedImages.get(i);
+            boolean thumbnail = isSelectedCover(storedImage.publicUrl(), coverImage) || (coverImage == null && order == 0);
             Image image = new Image(
                     board,
                     StorageType.LOCAL,
@@ -218,16 +224,20 @@ public class BoardService {
                     storedImage.storedName(),
                     storedImage.contentType(),
                     storedImage.fileSize(),
-                    i,
-                    i == 0
+                    order++,
+                    thumbnail
             );
+            thumbnailAssigned = thumbnailAssigned || thumbnail;
             board.getImages().add(image);
             imageRepository.save(image);
         }
-        retainUploadedImages(board, retainedImages, storedImages.isEmpty());
+        retainUploadedImages(board, retainedImages, coverImage, thumbnailAssigned, order);
     }
 
     private String replaceImagePlaceholders(String content, List<StoredImage> images) {
+        if (content == null) {
+            return null;
+        }
         Matcher legacyMatcher = LEGACY_PENDING_IMAGE_LINK_PATTERN.matcher(content);
         StringBuilder legacyReplaced = new StringBuilder();
         while (legacyMatcher.find()) {
@@ -256,9 +266,10 @@ public class BoardService {
         return replaced.toString();
     }
 
-    private List<StoredImage> referencedStoredImages(String content, List<StoredImage> storedImages) {
+    private List<StoredImage> referencedStoredImages(String content, String coverImage, List<StoredImage> storedImages) {
+        String references = (content == null ? "" : content) + "\n" + (coverImage == null ? "" : coverImage);
         return storedImages.stream()
-                .filter(image -> content.contains(image.publicUrl()))
+                .filter(image -> references.contains(image.publicUrl()))
                 .toList();
     }
 
@@ -298,6 +309,7 @@ public class BoardService {
                 summary.category(),
                 summary.tags(),
                 summary.coverImage(),
+                images(board),
                 summary.published(),
                 summary.views()
         );
@@ -319,6 +331,15 @@ public class BoardService {
                 .findFirst()
                 .map(Image::getFileKey)
                 .orElse(DEFAULT_COVER_IMAGE);
+    }
+
+    private List<PostImageResponse> images(Board board) {
+        return board.getImages()
+                .stream()
+                .filter(image -> image.getStorageType() == StorageType.LOCAL)
+                .filter(image -> image.getStoredName() != null && !"cover-image".equals(image.getStoredName()))
+                .map(PostImageResponse::from)
+                .toList();
     }
 
     private String excerpt(String content) {
@@ -380,23 +401,30 @@ public class BoardService {
                 .toList();
     }
 
-    private void retainUploadedImages(Board board, List<Image> retainedImages, boolean preserveThumbnail) {
-        retainedImages.stream()
-                .map(image -> new Image(
-                        board,
-                        image.getStorageType(),
-                        image.getFileKey(),
-                        image.getOriginalName(),
-                        image.getStoredName(),
-                        image.getContentType(),
-                        image.getFileSize(),
-                        image.getImageOrder(),
-                        preserveThumbnail && image.isThumbnail()
-                ))
-                .forEach(image -> {
-                    board.getImages().add(image);
-                    imageRepository.save(image);
-                });
+    private void retainUploadedImages(Board board, List<Image> retainedImages, String coverImage, boolean thumbnailAssigned, int startOrder) {
+        int order = startOrder;
+        boolean assigned = thumbnailAssigned;
+        for (Image retainedImage : retainedImages) {
+            boolean thumbnail = isSelectedCover(retainedImage.getFileKey(), coverImage) || (coverImage == null && !assigned && order == 0);
+            Image image = new Image(
+                    board,
+                    retainedImage.getStorageType(),
+                    retainedImage.getFileKey(),
+                    retainedImage.getOriginalName(),
+                    retainedImage.getStoredName(),
+                    retainedImage.getContentType(),
+                    retainedImage.getFileSize(),
+                    order++,
+                    thumbnail
+            );
+            assigned = assigned || thumbnail;
+            board.getImages().add(image);
+            imageRepository.save(image);
+        }
+    }
+
+    private boolean isSelectedCover(String imageUrl, String coverImage) {
+        return coverImage != null && coverImage.equals(imageUrl);
     }
 
     private void deleteStoredFilesAfterCommit(List<String> storedNames) {
