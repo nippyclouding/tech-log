@@ -41,11 +41,12 @@ public class AdminBoardController {
             @RequestParam(name = "category", required = false) String category,
             @RequestParam(name = "categories", required = false) List<String> categories,
             @RequestParam(name = "content") String content,
+            @RequestParam(name = "coverImage", required = false) String coverImage,
             @RequestParam(name = "tags", required = false) String tags,
             @RequestPart(name = "images", required = false) List<MultipartFile> images
     ) {
         List<String> selectedCategories = normalizeCategories(category, categories);
-        PostCreateRequest request = new PostCreateRequest(title, null, content, selectedCategories.get(0), null, splitTags(tags), selectedCategories);
+        PostCreateRequest request = new PostCreateRequest(title, null, content, selectedCategories.get(0), coverImage, splitTags(tags), selectedCategories);
         PostDetailResponse response = boardService.create(request, images);
         return ResponseEntity.created(URI.create("/api/posts/" + response.id())).body(response);
     }
@@ -62,11 +63,12 @@ public class AdminBoardController {
             @RequestParam(name = "category", required = false) String category,
             @RequestParam(name = "categories", required = false) List<String> categories,
             @RequestParam(name = "content") String content,
+            @RequestParam(name = "coverImage", required = false) String coverImage,
             @RequestParam(name = "tags", required = false) String tags,
             @RequestPart(name = "images", required = false) List<MultipartFile> images
     ) {
         List<String> selectedCategories = normalizeCategories(category, categories);
-        PostUpdateRequest request = new PostUpdateRequest(title, null, content, selectedCategories.get(0), null, splitTags(tags), selectedCategories);
+        PostUpdateRequest request = new PostUpdateRequest(title, null, content, selectedCategories.get(0), coverImage, splitTags(tags), selectedCategories);
         return ResponseEntity.ok(boardService.update(id, request, images));
     }
 

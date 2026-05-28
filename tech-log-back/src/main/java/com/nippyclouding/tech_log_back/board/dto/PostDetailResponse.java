@@ -12,6 +12,7 @@ public record PostDetailResponse(
         String category,
         List<String> tags,
         String coverImage,
+        List<PostImageResponse> images,
         boolean published,
         long views
 ) {

@@ -337,6 +337,31 @@ class BoardServiceTest {
     }
 
     @Test
+    @DisplayName("새 이미지 업로드 시 선택한 이미지를 대표 이미지로 저장한다")
+    void createWithImages_usesSelectedUploadedImageAsThumbnail() {
+        List<StoredImage> images = uploadedImages(2);
+        given(localImageStorageService.store(any())).willReturn(images);
+        given(boardRepository.save(any(Board.class))).willAnswer(invocation -> invocation.getArgument(0));
+        given(categoryRepository.findByName("Spring")).willReturn(Optional.of(category("Spring")));
+        PostCreateRequest request = new PostCreateRequest(
+                "이미지 글",
+                null,
+                "본문\n\n![첫번째](pending-image:0)\n\n![두번째](pending-image:1)",
+                "Spring",
+                "pending-image:1",
+                List.of(),
+                List.of("Spring")
+        );
+
+        PostDetailResponse response = boardService.create(request, List.of());
+
+        assertThat(response.coverImage()).isEqualTo("/image/1.png");
+        assertThat(response.images()).filteredOn(ImageResponse -> ImageResponse.thumbnail())
+                .singleElement()
+                .satisfies(image -> assertThat(image.url()).isEqualTo("/image/1.png"));
+    }
+
+    @Test
     @DisplayName("본문에 이미지 위치만 남고 파일이 없으면 깨진 게시글 저장을 거부한다")
     void createWithImages_rejectsPlaceholderWithoutSelectedFile() {
         given(localImageStorageService.store(any())).willReturn(List.of());
@@ -487,6 +512,34 @@ class BoardServiceTest {
         } finally {
             TransactionSynchronizationManager.clearSynchronization();
         }
+    }
+
+    @Test
+    @DisplayName("수정 시 기존 첨부 이미지를 대표 이미지로 변경할 수 있다")
+    void updateWithImages_changesExistingThumbnail() {
+        Board board = board("기존 글", "첫 이미지 ![](/image/keep.png)\n\n두번째 ![](/image/second.png)");
+        setId(board, 1L);
+        board.getImages().add(uploadedImage(board, "keep.png", true));
+        board.getImages().add(uploadedImage(board, "second.png", false));
+        given(boardRepository.findById(1L)).willReturn(Optional.of(board));
+        given(categoryRepository.findByName("Spring")).willReturn(Optional.of(category("Spring")));
+        given(localImageStorageService.store(any())).willReturn(List.of());
+        PostUpdateRequest request = new PostUpdateRequest(
+                "수정 글",
+                null,
+                board.getContent(),
+                "Spring",
+                "/image/second.png",
+                List.of(),
+                List.of("Spring")
+        );
+
+        PostDetailResponse response = boardService.update(1L, request, List.of());
+
+        assertThat(response.coverImage()).isEqualTo("/image/second.png");
+        assertThat(response.images()).filteredOn(image -> image.thumbnail())
+                .singleElement()
+                .satisfies(image -> assertThat(image.url()).isEqualTo("/image/second.png"));
     }
 
     @Test

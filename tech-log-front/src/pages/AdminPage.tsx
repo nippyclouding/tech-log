@@ -163,6 +163,7 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
   const draftKey = "tech-log.admin.post-draft";
   const [title, setTitle] = useState(post?.title ?? "");
   const [content, setContent] = useState(post?.content ?? "");
+  const [coverImage, setCoverImage] = useState(post?.coverImage?.startsWith("/image/") ? post.coverImage : "");
   const [selectedCategories, setSelectedCategories] = useState<string[]>(post?.tags ?? []);
   const [selectedCategory, setSelectedCategory] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -182,6 +183,7 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
       const savedContent = saved.content ?? "";
       setTitle(saved.title ?? "");
       setContent(savedContent);
+      setCoverImage(saved.coverImage ?? "");
       setSelectedCategories(Array.isArray(saved.categories) ? saved.categories : []);
       selection.current = { start: savedContent.length, end: savedContent.length };
       setDraftState("임시 저장 복원됨");
@@ -195,10 +197,10 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
     setSelectedCategories(current => current.filter(name => categories.some(category => category.name === name)));
   }, [categories]);
 
-  const saveDraft = (nextTitle: string, nextContent: string, nextCategories: string[]) => {
+  const saveDraft = (nextTitle: string, nextContent: string, nextCategories: string[], nextCoverImage = coverImage) => {
     if (!draft) return;
     try {
-      localStorage.setItem(draftKey, JSON.stringify({ title: nextTitle, content: nextContent, categories: nextCategories }));
+      localStorage.setItem(draftKey, JSON.stringify({ title: nextTitle, content: nextContent, categories: nextCategories, coverImage: nextCoverImage }));
       setDraftState("임시 저장됨");
     } catch {
       setDraftState("임시 저장 불가");
@@ -212,6 +214,10 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
   const updateContent = (value: string) => {
     setContent(value);
     saveDraft(title, value, selectedCategories);
+  };
+  const updateCoverImage = (value: string) => {
+    setCoverImage(value);
+    saveDraft(title, content, selectedCategories, value);
   };
   const addCategory = () => {
     if (!selectedCategory || selectedCategories.includes(selectedCategory)) return;
@@ -234,8 +240,10 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
     requestAnimationFrame(() => {
       const element = textarea.current;
       if (!element) return;
+      const scrollTop = element.scrollTop;
       element.focus();
       element.setSelectionRange(position, position);
+      element.scrollTop = scrollTop;
       selection.current = { start: position, end: position };
     });
   };
@@ -293,6 +301,35 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
     focusTextareaAt(position + placeholder.length);
   };
 
+  const cancelNewImageInsertion = (index: number) => {
+    const nextContent = removeMarkdownImageLine(content, `pending-image:${index}`);
+    updateContent(nextContent);
+    if (coverImage === `pending-image:${index}`) {
+      updateCoverImage("");
+    }
+    setStatus("본문에서 이미지 삽입을 취소했습니다. 파일은 첨부 목록에 남아 있습니다.");
+  };
+
+  const removeNewImage = (index: number) => {
+    const nextFiles = files.filter((_, currentIndex) => currentIndex !== index);
+    const nextContent = remapPendingImagesAfterRemoval(removeMarkdownImageLine(content, `pending-image:${index}`), index);
+    const nextCoverImage = remapPendingCoverAfterRemoval(coverImage, index);
+    setFiles(nextFiles);
+    setContent(nextContent);
+    updateCoverImage(nextCoverImage);
+    saveDraft(title, nextContent, selectedCategories, nextCoverImage);
+    setStatus("첨부 이미지를 삭제했습니다.");
+  };
+
+  const removeExistingImage = (url: string) => {
+    const nextContent = removeMarkdownImageLine(content, url);
+    updateContent(nextContent);
+    if (coverImage === url) {
+      updateCoverImage("");
+    }
+    setStatus("기존 이미지를 게시글에서 제거했습니다. 저장해야 반영됩니다.");
+  };
+
   const selectImages = (event: ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(event.target.files ?? []);
     if (!selected.length) return;
@@ -304,6 +341,7 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
   const reset = () => {
     setTitle("");
     setContent("");
+    setCoverImage("");
     setSelectedCategories([]);
     setFiles([]);
     setPreview(false);
@@ -322,13 +360,14 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
       return;
     }
     const form = new FormData();
-    const preparedImages = prepareImagesForSubmit(content, files);
+    const preparedImages = prepareImagesForSubmit(content, files, coverImage);
     if (preparedImages.error) {
       setStatus(preparedImages.error);
       return;
     }
     form.set("title", title);
     form.set("content", preparedImages.content);
+    if (preparedImages.coverImage) form.set("coverImage", preparedImages.coverImage);
     selectedCategories.forEach(category => form.append("categories", category));
     preparedImages.files.forEach(file => form.append("images", file));
     try {
@@ -342,6 +381,7 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
   };
 
   const words = content.trim() ? content.trim().split(/\s+/).length : 0;
+  const existingImages = extractExistingImages(content, post?.images ?? []);
 
   return (
     <form onSubmit={submit} className="mx-auto max-w-7xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -377,6 +417,8 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
                 rememberSelection(event.target);
               }}
               onSelect={event => rememberSelection(event.currentTarget)}
+              onClick={event => rememberSelection(event.currentTarget)}
+              onKeyUp={event => rememberSelection(event.currentTarget)}
               required
               placeholder="본문을 마크다운으로 입력하세요."
               className="min-h-[520px] w-full resize-y border-0 p-8 text-base leading-8 outline-none"
@@ -407,10 +449,30 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
           <h3 className="mb-3 font-bold">이미지</h3>
           <input ref={imageInput} type="file" accept="image/*" multiple onChange={selectImages} className="w-full rounded-lg border border-dashed border-slate-300 bg-white p-3 text-xs" />
           <p className="mt-2 text-xs leading-5 text-slate-500">파일을 추가한 뒤 Image 버튼으로 커서 위치에 배치하세요. 여러 번 선택해도 앞선 파일은 유지됩니다.</p>
+          {existingImages.length > 0 && (
+            <div className="mt-4">
+              <h4 className="mb-2 text-xs font-bold text-slate-700">기존 첨부 이미지</h4>
+              <ul className="space-y-2 text-xs text-slate-600">
+                {existingImages.map(image => (
+                  <li key={image.url} className="rounded-lg border border-slate-200 bg-white p-2">
+                    <img src={image.url} alt={image.originalName} className="mb-2 h-20 w-full rounded-md object-cover" />
+                    <div className="break-all font-semibold text-slate-700">{image.originalName}</div>
+                    <div className="mt-2 grid gap-1">
+                      <button type="button" onClick={() => updateCoverImage(image.url)} className={coverImage === image.url ? buttonClass : secondaryButtonClass}>
+                        {coverImage === image.url ? "썸네일 등록됨" : "썸네일로 설정"}
+                      </button>
+                      <button type="button" onClick={() => removeExistingImage(image.url)} className={dangerButtonClass}>등록 취소</button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {files.length > 0 && (
-            <ul className="mt-3 space-y-2 text-xs text-slate-600">
+            <ul className="mt-4 space-y-2 text-xs text-slate-600">
               {files.map((file, index) => {
                 const inserted = hasPendingImage(content, index);
+                const pendingCover = coverImage === `pending-image:${index}`;
                 return (
                   <li key={`${file.name}-${index}`} className="rounded-lg border border-slate-200 bg-white p-2">
                     <div className="font-semibold text-slate-700">{index + 1}. {file.name}</div>
@@ -419,6 +481,13 @@ function PostEditor({ categories, post, onSaved, onCancel, draft = false }: {
                       <button type="button" onClick={() => insertImage(index)} disabled={inserted} className="rounded-md border border-slate-200 px-2 py-1 font-bold disabled:cursor-not-allowed disabled:opacity-40">
                         삽입
                       </button>
+                    </div>
+                    <div className="mt-2 grid gap-1">
+                      <button type="button" onClick={() => updateCoverImage(`pending-image:${index}`)} disabled={!inserted} className={pendingCover ? buttonClass : secondaryButtonClass}>
+                        {pendingCover ? "썸네일 등록됨" : "썸네일로 설정"}
+                      </button>
+                      {inserted && <button type="button" onClick={() => cancelNewImageInsertion(index)} className={secondaryButtonClass}>삽입 취소</button>}
+                      <button type="button" onClick={() => removeNewImage(index)} className={dangerButtonClass}>첨부 삭제</button>
                     </div>
                   </li>
                 );
@@ -455,14 +524,19 @@ function safeImageAlt(filename: string, index: number) {
   return normalized || `이미지 ${index + 1}`;
 }
 
-function prepareImagesForSubmit(content: string, files: File[]) {
+function prepareImagesForSubmit(content: string, files: File[], coverImage: string) {
   const references = [...content.matchAll(/pending-image:(\d+)(?!\d)/g)].map(match => Number(match[1]));
+  const pendingCover = coverImage.match(/^pending-image:(\d+)$/);
+  if (pendingCover) {
+    references.push(Number(pendingCover[1]));
+  }
   const orderedReferences = Array.from(new Set(references));
   const missing = orderedReferences.find(index => !Number.isInteger(index) || index < 0 || index >= files.length);
   if (missing !== undefined) {
     return {
       content,
       files: [],
+      coverImage: "",
       error: "본문에 배치한 이미지 파일을 다시 선택하세요.",
     };
   }
@@ -473,12 +547,58 @@ function prepareImagesForSubmit(content: string, files: File[]) {
     const nextIndex = indexMap.get(Number(indexText));
     return `pending-image:${nextIndex}`;
   });
+  const remappedCoverImage = pendingCover
+    ? `pending-image:${indexMap.get(Number(pendingCover[1]))}`
+    : coverImage;
 
   return {
     content: remappedContent,
     files: orderedReferences.map(index => files[index]),
+    coverImage: remappedCoverImage,
     error: "",
   };
+}
+
+function extractExistingImages(content: string, images: NonNullable<Post["images"]>) {
+  const knownImages = new Map(images.map(image => [image.url, image]));
+  const urls = Array.from(content.matchAll(/!\[[^\]]*]\((\/image\/[^)]+)\)/g)).map(match => match[1]);
+  images.forEach(image => urls.push(image.url));
+
+  return Array.from(new Set(urls)).map((url, index) => {
+    const known = knownImages.get(url);
+    return {
+      url,
+      originalName: known?.originalName ?? url.split("/").pop() ?? `image-${index + 1}`,
+      storedName: known?.storedName ?? url.split("/").pop() ?? "",
+      order: known?.order ?? index,
+      thumbnail: known?.thumbnail ?? false,
+    };
+  });
+}
+
+function removeMarkdownImageLine(content: string, target: string) {
+  return content
+    .split("\n")
+    .filter(line => !(line.includes("![") && line.includes(`](${target})`)))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
+function remapPendingImagesAfterRemoval(content: string, removedIndex: number) {
+  return content.replace(/pending-image:(\d+)(?!\d)/g, (match, indexText: string) => {
+    const index = Number(indexText);
+    if (index < removedIndex) return match;
+    return `pending-image:${index - 1}`;
+  });
+}
+
+function remapPendingCoverAfterRemoval(coverImage: string, removedIndex: number) {
+  const match = coverImage.match(/^pending-image:(\d+)$/);
+  if (!match) return coverImage;
+  const index = Number(match[1]);
+  if (index === removedIndex) return "";
+  if (index > removedIndex) return `pending-image:${index - 1}`;
+  return coverImage;
 }
 
 function PostManager({ categories }: { categories: Category[] }) {
