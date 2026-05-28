@@ -254,6 +254,37 @@ class BoardServiceTest {
     }
 
     @Test
+    @DisplayName("본문에 삽입하지 않은 업로드 이미지는 자동으로 글 끝에 붙이지 않고 정리한다")
+    void createWithImages_ignoresUnreferencedUploadedImages() {
+        List<StoredImage> images = uploadedImages(1);
+        given(localImageStorageService.store(any())).willReturn(images);
+        given(boardRepository.save(any(Board.class))).willAnswer(invocation -> invocation.getArgument(0));
+        given(categoryRepository.findByName("Spring")).willReturn(Optional.of(category("Spring")));
+        PostCreateRequest request = new PostCreateRequest(
+                "이미지 글",
+                null,
+                "본문만 저장",
+                "Spring",
+                null,
+                List.of(),
+                List.of("Spring")
+        );
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            PostDetailResponse response = boardService.create(request, List.of());
+
+            assertThat(response.content()).isEqualTo("본문만 저장");
+            assertThat(response.coverImage()).isEqualTo("https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&auto=format&fit=crop");
+            verify(imageRepository, never()).save(any(Image.class));
+            TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+            verify(localImageStorageService).deleteStoredFiles(List.of("0.png"));
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
     @DisplayName("대괄호가 있는 파일명도 안전한 이미지 alt 텍스트로 치환한다")
     void create_replacesBracketedFilenameWithSafeImageAltText() {
         List<StoredImage> images = List.of(new StoredImage(
@@ -423,6 +454,39 @@ class BoardServiceTest {
         verify(imageRepository, never()).deleteByBoard(board);
         verify(imageRepository, never()).save(any(Image.class));
         verify(localImageStorageService, never()).deleteStoredFiles(any());
+    }
+
+    @Test
+    @DisplayName("수정 시 새로 선택했지만 본문에 삽입하지 않은 이미지는 저장하지 않고 정리한다")
+    void updateWithImages_ignoresUnreferencedNewImages() {
+        Board board = board("기존 글", "기존 이미지 ![](/image/keep.png)");
+        setId(board, 1L);
+        board.getImages().add(uploadedImage(board, "keep.png", true));
+        given(boardRepository.findById(1L)).willReturn(Optional.of(board));
+        given(categoryRepository.findByName("Spring")).willReturn(Optional.of(category("Spring")));
+        given(localImageStorageService.store(any())).willReturn(uploadedImages(1));
+        PostUpdateRequest request = new PostUpdateRequest(
+                "수정 글",
+                null,
+                "기존 이미지 ![](/image/keep.png)",
+                "Spring",
+                null,
+                List.of(),
+                List.of("Spring")
+        );
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            PostDetailResponse response = boardService.update(1L, request, List.of());
+
+            assertThat(response.coverImage()).isEqualTo("/image/keep.png");
+            assertThat(board.getImages()).singleElement()
+                    .satisfies(image -> assertThat(image.getStoredName()).isEqualTo("keep.png"));
+            TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+            verify(localImageStorageService).deleteStoredFiles(List.of("0.png"));
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     @Test
